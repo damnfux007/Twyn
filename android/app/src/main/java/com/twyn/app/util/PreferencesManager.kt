@@ -54,7 +54,7 @@ class PreferencesManager @Inject constructor(
         set(value) = prefs.edit().putBoolean(KEY_SHOW_ONLINE, value).apply()
 
     var serverUrl: String
-        get() = prefs.getString(KEY_SERVER_URL, "ws://YOUR_SERVER_IP:8080/ws") ?: "ws://YOUR_SERVER_IP:8080/ws"
+        get() = prefs.getString(KEY_SERVER_URL, "wss://your-project-name.glitch.me/ws") ?: "wss://your-project-name.glitch.me/ws"
         set(value) = prefs.edit().putString(KEY_SERVER_URL, value).apply()
 
     var googleAccountEmail: String?

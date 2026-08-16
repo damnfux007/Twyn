@@ -19,10 +19,11 @@ android/gradlew
 android/gradlew.bat
 android/gradle/wrapper/
 
-# ── Twyn Server ───────────────────────────────────────────────
-server/build/
-server/.gradle/
-server/*.iml
+# ── Twyn Server (Node.js) ────────────────────────────────────
+server/node_modules/
+server/media/
+server/.env
+server/package-lock.json
 
 # ── Secrets (NEVER commit these) ──────────────────────────────
 *.keystore
@@ -31,12 +32,10 @@ google-services.json
 *.env
 .env.local
 
-# ── OS ────────────────────────────────────────────────────────
+# ── OS / IDE ──────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# ── IDE ───────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
