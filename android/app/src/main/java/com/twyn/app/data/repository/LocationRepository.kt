@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Looper
 import com.google.android.gms.location.*
+import com.twyn.app.data.remote.websocket.TwynWebSocketClient
 import com.twyn.app.domain.model.LocationData
 import com.twyn.app.domain.model.WsMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
