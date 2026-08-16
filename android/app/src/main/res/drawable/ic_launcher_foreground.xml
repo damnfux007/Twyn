@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Two overlapping speech bubbles forming "Twyn" -->
+    <path
+        android:fillColor="#E94560"
+        android:pathData="M38,35 C38,28 44,22 52,22 C60,22 66,28 66,35 C66,42 60,48 52,48 L48,48 L42,56 L42,48 C39.8,48 38,46.2 38,44 Z" />
+    <path
+        android:fillColor="#0F3460"
+        android:pathData="M48,52 C48,47 52,42 58,42 C64,42 68,47 68,52 C68,57 64,62 58,62 L54,62 L48,70 L48,62 C48,60 46,58 44,58" />
+</vector>
