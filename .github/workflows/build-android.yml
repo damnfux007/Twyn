@@ -3,16 +3,15 @@ name: Build Android APK & Release
 on:
   push:
     tags:
-      - 'v*'    # Trigger on version tags like v1.0.0
-  workflow_dispatch:  # Allow manual trigger
+      - 'v*'
+  workflow_dispatch:
 
 env:
   JAVA_VERSION: '17'
-  ANDROID_SDK_VERSION: '34'
 
 jobs:
   build-apk:
-    name: Build Signed APK
+    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
@@ -28,29 +27,19 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Decode keystore from secret
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Build release APK
+      - name: Generate Gradle wrapper
+        working-directory: android
+        run: gradle wrapper
+
+      - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=release.keystore \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
-            --no-daemon
-          echo "Release APK built"
-
-      - name: Sign APK (alternative method)
-        if: hashFiles('android/app/release.keystore') == ''
-        working-directory: android
-        run: |
-          # If keystore not present, build debug APK instead
           ./gradlew assembleDebug --no-daemon
-          echo "Debug APK built (no signing key provided)"
+          echo "Debug APK built"
 
       - name: Find APK file
         id: find-apk
@@ -77,9 +66,6 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
@@ -91,7 +77,6 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building release for $VERSION"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -101,24 +86,21 @@ jobs:
           body: |
             ## Twyn ${{ steps.version.outputs.version }}
 
-            ### What's New
-            - See commit history for changes
-
             ### Installation
             1. Download the APK below
             2. Enable "Install from unknown sources" on your Android device
             3. Open the APK to install
-            4. Enter the server URL when prompted
+            4. Enter your name and server URL on the sign-in screen
 
-            ### Server Setup
-            The Twyn WebSocket server runs on Oracle Cloud Always Free tier.
-            See `server/` directory for deployment instructions.
+            ### Server Setup (free, no credit card)
+            1. Go to glitch.com → Import from GitHub → select damnfux007/Twyn
+            2. Your server URL: https://your-project-name.glitch.me
+            3. Enter wss://your-project-name.glitch.me/ws in the app
 
             ### Security
             - End-to-end encryption via Signal Protocol
             - Server never sees plaintext
             - Each paired connection has unique encryption keys
-          files: |
-            ./release/*.apk
+          files: ./release/*.apk
           draft: false
           prerelease: false
