@@ -96,7 +96,6 @@ dependencies {
     // ── Networking ─────────────────────────────────────────────────
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    implementation("com.squareup.okhttp3:okhttp-ws:4.12.0")
 
     // ── Signal Protocol (E2E Encryption) ───────────────────────────
     // Uses the libsignal library (Signal's open-source crypto library)
@@ -119,7 +118,8 @@ dependencies {
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
     // ── WebRTC (Voice/Video Calling) ───────────────────────────────
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    // TODO: Add WebRTC AAR manually or from correct Maven coordinates
+    // WebRTC signaling uses OkHttp WebSocket (already included above)
 
     // ── Location Services ──────────────────────────────────────────
     implementation("com.google.android.gms:play-services-location:21.0.1")
@@ -129,9 +129,10 @@ dependencies {
     implementation("org.osmdroid:osmdroid-android:6.1.18")
 
     // ── Google Drive API (for permanent media storage) ─────────────
-    implementation("com.google.api-client:google-api-client-android:2.2.0")
-    implementation("com.google.apis:google-api-services-drive:v3-rev20231127-2.0.0")
-    implementation("com.google.auth:google-auth-library-oauth2-http:1.20.0")
+    // TODO: Add back when we confirm correct artifact coordinates
+    // implementation("com.google.api-client:google-api-client-android:2.2.0")
+    // implementation("com.google.apis:google-api-services-drive:v3-rev20231127-2.0.0")
+    // implementation("com.google.auth:google-auth-library-oauth2-http:1.20.0")
 
     // ── Google Sign-In (for Drive auth) ────────────────────────────
     implementation("com.google.android.gms:play-services-auth:20.7.0")
@@ -141,7 +142,6 @@ dependencies {
 
     // ── MediaCodec helpers ─────────────────────────────────────────
     implementation("androidx.media3:media3-exoplayer:1.2.0")
-    implementation("androidx.media3:media3-transform:1.2.0")
 
     // ── Coroutines ─────────────────────────────────────────────────
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
