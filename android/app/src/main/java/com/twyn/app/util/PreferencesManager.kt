@@ -27,6 +27,7 @@ class PreferencesManager @Inject constructor(
         private const val KEY_SHOW_ONLINE = "show_online_status"
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_GOOGLE_ACCOUNT = "google_account_email"
+        private const val KEY_SIGNED_IN = "is_signed_in"
     }
 
     var userId: String
@@ -60,6 +61,10 @@ class PreferencesManager @Inject constructor(
     var googleAccountEmail: String?
         get() = prefs.getString(KEY_GOOGLE_ACCOUNT, null)
         set(value) = prefs.edit().putString(KEY_GOOGLE_ACCOUNT, value).apply()
+
+    var isSignedIn: Boolean
+        get() = prefs.getBoolean(KEY_SIGNED_IN, false)
+        set(value) = prefs.edit().putBoolean(KEY_SIGNED_IN, value).apply()
 
     private fun generateAndStoreUserId(): String {
         val id = "twyn_${Settings.Secure.ANDROID_ID}_${System.currentTimeMillis()}"

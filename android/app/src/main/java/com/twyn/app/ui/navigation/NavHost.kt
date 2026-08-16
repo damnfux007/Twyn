@@ -3,11 +3,14 @@ package com.twyn.app.ui.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.twyn.app.ui.welcome.WelcomeScreen
 import com.twyn.app.ui.pairing.PairingScreen
 import com.twyn.app.ui.pairing.QrScanScreen
 import com.twyn.app.ui.chatlist.ChatListScreen
@@ -16,21 +19,10 @@ import com.twyn.app.ui.media.MediaLibraryScreen
 import com.twyn.app.ui.location.LocationShareScreen
 import com.twyn.app.ui.calling.CallingScreen
 import com.twyn.app.ui.settings.SettingsScreen
+import com.twyn.app.util.PreferencesManager
 
-/**
- * Navigation graph for Twyn.
- *
- * Routes:
- * - chat_list: Home screen showing all paired chats
- * - pairing: QR code generation screen
- * - qr_scan: QR code scanning screen (camera or gallery)
- * - chat/{pairingId}: Individual 1-on-1 chat screen
- * - media/{pairingId}: Media library for a specific pairing
- * - location/{pairingId}: Location sharing screen
- * - calling/{pairingId}?type=voice|video: Voice/video call screen
- * - settings: Profile and app settings
- */
 sealed class Screen(val route: String) {
+    object Welcome : Screen("welcome")
     object ChatList : Screen("chat_list")
     object Pairing : Screen("pairing")
     object QrScan : Screen("qr_scan")
@@ -52,41 +44,44 @@ sealed class Screen(val route: String) {
 @Composable
 fun TwynNavHost() {
     val navController = rememberNavController()
+    val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
+    val startDestination = if (prefs.isSignedIn) Screen.ChatList.route else Screen.Welcome.route
 
     NavHost(
         navController = navController,
-        startDestination = Screen.ChatList.route,
+        startDestination = startDestination,
         enterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { it },
-                animationSpec = tween(300)
-            ) + fadeIn(animationSpec = tween(300))
+            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) +
+                    fadeIn(animationSpec = tween(300))
         },
         exitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { -it / 3 },
-                animationSpec = tween(300)
-            ) + fadeOut(animationSpec = tween(200))
+            slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = tween(300)) +
+                    fadeOut(animationSpec = tween(200))
         },
         popEnterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { -it / 3 },
-                animationSpec = tween(300)
-            ) + fadeIn(animationSpec = tween(300))
+            slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = tween(300)) +
+                    fadeIn(animationSpec = tween(300))
         },
         popExitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { it },
-                animationSpec = tween(300)
-            ) + fadeOut(animationSpec = tween(200))
+            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300)) +
+                    fadeOut(animationSpec = tween(200))
         }
     ) {
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onSignInComplete = {
+                    navController.navigate(Screen.ChatList.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.ChatList.route) {
             ChatListScreen(
                 onPairNewContact = { navController.navigate(Screen.Pairing.route) },
-                onOpenChat = { pairingId ->
-                    navController.navigate(Screen.Chat.createRoute(pairingId))
-                },
+                onOpenChat = { pairingId -> navController.navigate(Screen.Chat.createRoute(pairingId)) },
                 onOpenSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
@@ -100,9 +95,7 @@ fun TwynNavHost() {
 
         composable(Screen.QrScan.route) {
             QrScanScreen(
-                onPairingComplete = {
-                    navController.popBackStack(Screen.ChatList.route, false)
-                },
+                onPairingComplete = { navController.popBackStack(Screen.ChatList.route, false) },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -126,10 +119,7 @@ fun TwynNavHost() {
             arguments = listOf(navArgument("pairingId") { type = NavType.StringType })
         ) { backStackEntry ->
             val pairingId = backStackEntry.arguments?.getString("pairingId") ?: return@composable
-            MediaLibraryScreen(
-                pairingId = pairingId,
-                onBack = { navController.popBackStack() }
-            )
+            MediaLibraryScreen(pairingId = pairingId, onBack = { navController.popBackStack() })
         }
 
         composable(
@@ -137,10 +127,7 @@ fun TwynNavHost() {
             arguments = listOf(navArgument("pairingId") { type = NavType.StringType })
         ) { backStackEntry ->
             val pairingId = backStackEntry.arguments?.getString("pairingId") ?: return@composable
-            LocationShareScreen(
-                pairingId = pairingId,
-                onBack = { navController.popBackStack() }
-            )
+            LocationShareScreen(pairingId = pairingId, onBack = { navController.popBackStack() })
         }
 
         composable(
