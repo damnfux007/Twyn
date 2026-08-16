@@ -1,0 +1,141 @@
+name: Deploy Server to Oracle Cloud
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-server.yml'
+
+env:
+  JAVA_VERSION: '17'
+  ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+  ORACLE_USER: ${{ secrets.ORACLE_USER }}
+  ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Build server JAR
+        working-directory: server
+        run: |
+          gradle shadowJar --no-daemon
+          echo "Server JAR built successfully"
+
+      - name: Create remote directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.ORACLE_HOST }}
+          username: ${{ env.ORACLE_USER }}
+          key: ${{ env.ORACLE_SSH_KEY }}
+          script: |
+            sudo mkdir -p /opt/twyn-server
+            sudo mkdir -p /tmp/twyn-media
+            sudo chown -R $USER:$USER /opt/twyn-server /tmp/twyn-media
+
+      - name: Upload JAR to Oracle Cloud
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.ORACLE_HOST }}
+          username: ${{ env.ORACLE_USER }}
+          key: ${{ env.ORACLE_SSH_KEY }}
+          source: "server/build/libs/*.jar"
+          target: "/opt/twyn-server/"
+          strip_components: 2
+
+      - name: Deploy and restart server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.ORACLE_HOST }}
+          username: ${{ env.ORACLE_USER }}
+          key: ${{ env.ORACLE_SSH_KEY }}
+          script: |
+            # Kill any existing Twyn server
+            pkill -f "twyn-server" || true
+            sleep 2
+
+            # Find the JAR file
+            JAR=$(ls /opt/twyn-server/*.jar 2>/dev/null | head -1)
+            if [ -z "$JAR" ]; then
+              echo "ERROR: No JAR file found"
+              exit 1
+            fi
+
+            # Start the server in background
+            nohup java -jar "$JAR" > /var/log/twyn-server.log 2>&1 &
+            echo "Server started with PID $!"
+            sleep 3
+
+            # Health check
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Server health check PASSED"
+            else
+              echo "Server health check FAILED — checking logs..."
+              tail -50 /var/log/twyn-server.log
+              exit 1
+            fi
+
+      - name: Create systemd service (first deploy only)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.ORACLE_HOST }}
+          username: ${{ env.ORACLE_USER }}
+          key: ${{ env.ORACLE_SSH_KEY }}
+          script: |
+            if [ ! -f /etc/systemd/system/twyn-server.service ]; then
+              sudo tee /etc/systemd/system/twyn-server.service > /dev/null <<EOF
+          [Unit]
+          Description=Twyn WebSocket Server
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=$USER
+          WorkingDirectory=/opt/twyn-server
+          ExecStart=/usr/bin/java -jar /opt/twyn-server/twyn-server.jar
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+          Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+              sudo systemctl daemon-reload
+              sudo systemctl enable twyn-server
+              sudo systemctl start twyn-server
+              echo "Systemd service created and started"
+            else
+              sudo systemctl restart twyn-server
+              echo "Existing service restarted"
+            fi
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.ORACLE_HOST }}
+          username: ${{ env.ORACLE_USER }}
+          key: ${{ env.ORACLE_SSH_KEY }}
+          script: |
+            echo "=== Twyn Server Status ==="
+            sudo systemctl status twyn-server --no-pager || true
+            echo ""
+            echo "=== Health Check ==="
+            curl -s http://localhost:8080/health
+            echo ""
+            echo "=== Server IP ==="
+            curl -s ifconfig.me || echo "Could not determine public IP"
