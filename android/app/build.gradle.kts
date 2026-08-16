@@ -112,7 +112,7 @@ dependencies {
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
     // ── ZXing (QR code generation) ─────────────────────────────────
-    implementation("com.github.alexzhirkevich:custom-qr-generator:2.0.0")
+    implementation("com.github.alexzhirkevich:custom-qr-generator:1.6.2")
 
     // ── Accompanist (Permissions) ──────────────────────────────────
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
