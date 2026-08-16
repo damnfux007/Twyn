@@ -99,19 +99,10 @@ class LocationRepository @Inject constructor(
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 fusedLocationClient.removeLocationUpdates(this)
-                cont.resume(result.lastLocation)
+                if (cont.isActive) cont.resume(result.lastLocation)
             }
         }
 
         fusedLocationClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
-
-        // Timeout: if no fix in 10 seconds, return null
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-            kotlinx.coroutines.delay(10_000)
-            if (cont.context.isActive) {
-                fusedLocationClient.removeLocationUpdates(callback)
-                cont.resume(null)
-            }
-        }
     }
 }

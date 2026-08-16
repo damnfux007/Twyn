@@ -1,6 +1,5 @@
 package com.twyn.app.ui.calling
 
-import android.view.View
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -12,24 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.twyn.app.ui.theme.*
-import org.webrtc.SurfaceViewRenderer
 
-/**
- * Voice/Video call screen.
- *
- * Uses WebRTC for peer-to-peer media streaming.
- * Server is only used for signaling (offer/answer/ICE candidates),
- * then the media flows directly between devices.
- *
- * Voice calls: audio only, minimal bandwidth.
- * Video calls: camera + screen sharing, P2P.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallingScreen(
@@ -41,7 +27,6 @@ fun CallingScreen(
     val callState by viewModel.callState.collectAsState()
     val callDuration by viewModel.callDuration.collectAsState()
 
-    // Start the call when screen appears
     LaunchedEffect(pairingId) {
         viewModel.startCall(pairingId, "local_user", callType)
     }
@@ -56,12 +41,10 @@ fun CallingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top: Partner info and call status
             Column(
                 modifier = Modifier.padding(top = 64.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Partner avatar
                 Box(
                     modifier = Modifier
                         .size(96.dp)
@@ -87,7 +70,6 @@ fun CallingScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Call state text
                 Text(
                     text = when (callState) {
                         CallState.CALLING -> "Calling..."
@@ -106,7 +88,6 @@ fun CallingScreen(
                 )
             }
 
-            // Middle: Video view (for video calls)
             if (callType == "video" && callState == CallState.CONNECTED) {
                 Box(
                     modifier = Modifier
@@ -115,21 +96,14 @@ fun CallingScreen(
                         .padding(16.dp)
                         .clip(MaterialTheme.shapes.medium)
                         .background(Surface)
-                ) {
-                    // In production: SurfaceViewRenderer for remote video
-                    // AndroidView(factory = { ctx ->
-                    //     SurfaceViewRenderer(ctx).apply { init(eglBase.eglBaseContext, null) }
-                    // })
-                }
+                )
             }
 
-            // Bottom: Call controls
             Row(
                 modifier = Modifier.padding(32.dp),
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Mute button
                 var isMuted by remember { mutableStateOf(false) }
                 FloatingActionButton(
                     onClick = { isMuted = !isMuted },
@@ -144,7 +118,6 @@ fun CallingScreen(
                     )
                 }
 
-                // End call button (large red)
                 FloatingActionButton(
                     onClick = {
                         viewModel.endCall(pairingId)
@@ -162,7 +135,6 @@ fun CallingScreen(
                     )
                 }
 
-                // Speaker button
                 var isSpeaker by remember { mutableStateOf(false) }
                 FloatingActionButton(
                     onClick = { isSpeaker = !isSpeaker },
