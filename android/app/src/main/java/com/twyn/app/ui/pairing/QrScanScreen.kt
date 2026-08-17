@@ -212,7 +212,6 @@ private fun scanQrFromBitmap(
     scanner.process(image)
         .addOnSuccessListener { barcodes ->
             val qr = barcodes.firstOrNull { barcode ->
-                barcode.valueType == Barcode.TYPE_TEXT &&
                 barcode.rawValue?.startsWith("twyn:") == true
             }
             if (qr != null) {
@@ -241,7 +240,6 @@ private fun scanQrFromImage(
         scanner.process(image)
             .addOnSuccessListener { barcodes ->
                 val qr = barcodes.firstOrNull { barcode ->
-                    barcode.valueType == Barcode.TYPE_TEXT &&
                     barcode.rawValue?.startsWith("twyn:") == true
                 }
                 if (qr != null) {

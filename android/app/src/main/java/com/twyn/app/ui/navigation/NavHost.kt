@@ -1,5 +1,7 @@
 package com.twyn.app.ui.navigation
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -147,7 +149,14 @@ fun TwynNavHost() {
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToPairing = { navController.navigate(Screen.Pairing.route) },
+                onCheckUpdate = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/damnfux007/Twyn/releases"))
+                    context.startActivity(intent)
+                }
+            )
         }
     }
 }

@@ -1,5 +1,11 @@
 package com.twyn.app.ui.settings
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,30 +19,49 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.twyn.app.ui.theme.*
+import java.io.ByteArrayOutputStream
+import java.io.File
 
-/**
- * Settings screen — profile and app configuration.
- *
- * Features:
- * - Edit display name and bio (shown to all paired contacts)
- * - Profile photo (uploaded to server, shown in chat list)
- * - Online/last-seen status toggle
- * - Chat theme customization
- * - App theme (dark/light)
- * - About/version info
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onNavigateToPairing: () -> Unit = {},
+    onCheckUpdate: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val profile by viewModel.profile.collectAsState()
     var showOnlineStatus by remember { mutableStateOf(profile.showOnlineStatus) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(it)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+
+                val scaled = Bitmap.createScaledBitmap(bitmap, 400, 400, true)
+                val baos = ByteArrayOutputStream()
+                scaled.compress(Bitmap.CompressFormat.JPEG, 80, baos)
+                val base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+
+                val file = File(context.filesDir, "profile_photo.jpg")
+                file.writeBytes(Base64.decode(base64, Base64.DEFAULT))
+
+                viewModel.updateProfilePhoto(file.absolutePath)
+            } catch (_: Exception) { }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -60,10 +85,8 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // ── Profile Section ────────────────────────────────────
             SectionHeader("Profile")
 
-            // Profile photo
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -77,11 +100,22 @@ fun SettingsScreen(
                         .background(Primary),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = profile.displayName.take(1).uppercase(),
-                        color = OnPrimary,
-                        style = MaterialTheme.typography.displayLarge
-                    )
+                    if (profile.profilePhotoUrl.isNotEmpty() && File(profile.profilePhotoUrl).exists()) {
+                        AsyncImage(
+                            model = File(profile.profilePhotoUrl),
+                            contentDescription = "Profile Photo",
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = profile.displayName.take(1).uppercase(),
+                            color = OnPrimary,
+                            style = MaterialTheme.typography.displayLarge
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
@@ -90,13 +124,12 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium
                     )
-                    TextButton(onClick = { /* Open photo picker */ }) {
+                    TextButton(onClick = { galleryLauncher.launch("image/*") }) {
                         Text("Change Photo")
                     }
                 }
             }
 
-            // Display name
             var displayName by remember { mutableStateOf(profile.displayName) }
             SettingTextField(
                 label = "Display Name",
@@ -107,7 +140,6 @@ fun SettingsScreen(
                 }
             )
 
-            // Bio
             var bio by remember { mutableStateOf(profile.bio) }
             SettingTextField(
                 label = "Bio",
@@ -124,10 +156,8 @@ fun SettingsScreen(
                 color = SurfaceLight
             )
 
-            // ── Privacy Section ────────────────────────────────────
             SectionHeader("Privacy")
 
-            // Online status toggle
             SettingToggle(
                 title = "Show Online Status",
                 subtitle = "Let paired contacts see when you're online",
@@ -144,10 +174,8 @@ fun SettingsScreen(
                 color = SurfaceLight
             )
 
-            // ── Appearance Section ──────────────────────────────────
             SectionHeader("Appearance")
 
-            // Theme toggle
             var isDarkTheme by remember { mutableStateOf(true) }
             SettingToggle(
                 title = "Dark Theme",
@@ -157,12 +185,11 @@ fun SettingsScreen(
                 onCheckedChange = { isDarkTheme = it }
             )
 
-            // Chat wallpaper / theme
             SettingClickable(
                 title = "Chat Theme",
                 subtitle = "Customize chat bubble colors",
                 icon = Icons.Default.Palette,
-                onClick = { /* Open theme picker */ }
+                onClick = { }
             )
 
             Divider(
@@ -170,21 +197,20 @@ fun SettingsScreen(
                 color = SurfaceLight
             )
 
-            // ── Account Section ─────────────────────────────────────
             SectionHeader("Account")
 
             SettingClickable(
                 title = "Your Pairing QR Code",
                 subtitle = "Generate a new QR code to pair with someone",
                 icon = Icons.Default.QrCode,
-                onClick = { /* Navigate to pairing screen */ }
+                onClick = onNavigateToPairing
             )
 
             SettingClickable(
-                title = "Google Drive",
-                subtitle = "Manage permanent media storage",
-                icon = Icons.Default.Cloud,
-                onClick = { /* Open Google Sign-In */ }
+                title = "Check for Updates",
+                subtitle = "See if a new version is available",
+                icon = Icons.Default.SystemUpdate,
+                onClick = onCheckUpdate
             )
 
             Divider(
@@ -192,14 +218,13 @@ fun SettingsScreen(
                 color = SurfaceLight
             )
 
-            // ── About Section ───────────────────────────────────────
             SectionHeader("About")
 
             SettingClickable(
-                title = "Twyn v1.0.0",
+                title = "Twyn v1.0.12",
                 subtitle = "End-to-end encrypted 1-on-1 messaging",
                 icon = Icons.Default.Info,
-                onClick = { }
+                onClick = onCheckUpdate
             )
 
             Spacer(modifier = Modifier.height(32.dp))

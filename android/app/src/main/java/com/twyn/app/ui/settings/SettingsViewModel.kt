@@ -4,18 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twyn.app.data.repository.ProfileRepository
 import com.twyn.app.domain.model.UserProfile
+import com.twyn.app.util.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * ViewModel for the Settings screen.
- * Manages profile editing and app preferences.
- */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow(UserProfile(userId = "", displayName = ""))
@@ -44,5 +42,10 @@ class SettingsViewModel @Inject constructor(
             profileRepository.updateProfile(showOnlineStatus = show)
             _profile.value = _profile.value.copy(showOnlineStatus = show)
         }
+    }
+
+    fun updateProfilePhoto(localPath: String) {
+        preferencesManager.profilePhotoUrl = localPath
+        _profile.value = _profile.value.copy(profilePhotoUrl = localPath)
     }
 }
