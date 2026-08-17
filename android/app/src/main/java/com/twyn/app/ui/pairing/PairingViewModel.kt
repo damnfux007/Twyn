@@ -32,7 +32,7 @@ class PairingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val profile = profileRepository.getLocalProfile()
-                val bitmap = pairingRepository.generatePairingQrCode(profile.userId)
+                val bitmap = pairingRepository.generatePairingQrCode(profile.userId, profile.displayName)
                 _uiState.value = _uiState.value.copy(
                     qrBitmap = bitmap,
                     pairingCode = profile.userId.take(8).uppercase()

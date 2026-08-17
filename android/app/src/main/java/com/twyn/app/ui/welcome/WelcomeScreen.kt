@@ -1,11 +1,12 @@
 package com.twyn.app.ui.welcome
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,24 +16,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.twyn.app.ui.theme.*
+import kotlinx.coroutines.delay
 
 /**
  * Welcome / Sign-In screen shown on first launch.
- *
- * Features:
- * - Display name input (shown to all paired contacts)
- * - Bio (optional, shown in profile)
- * - Server URL input (pre-filled with Render URL)
- * - One-tap sign-in, no password needed
- * - Clean animated entrance
+ * Smooth staggered entrance, no logo — just name → home.
  */
 @Composable
 fun WelcomeScreen(
@@ -40,10 +40,17 @@ fun WelcomeScreen(
     viewModel: WelcomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val focusManager = LocalFocusManager.current
 
-    // Navigate away when sign-in completes
     LaunchedEffect(uiState.isComplete) {
         if (uiState.isComplete) onSignInComplete()
+    }
+
+    // Staggered entrance animation
+    var showContent by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(100)
+        showContent = true
     }
 
     Box(
@@ -62,145 +69,167 @@ fun WelcomeScreen(
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
+            Spacer(modifier = Modifier.height(80.dp))
 
-            // App logo / icon
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .background(Primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "T",
-                    color = OnPrimary,
-                    fontSize = 42.sp,
-                    fontWeight = FontWeight.Bold
+            // App name — staggered fade + slide
+            AnimatedVisibility(
+                visible = showContent,
+                enter = fadeIn(tween(500)) + slideInVertically(
+                    initialOffsetY = { it / 4 },
+                    animationSpec = tween(500, easing = FastOutSlowInEasing)
                 )
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Twyn",
+                        style = MaterialTheme.typography.displayLarge,
+                        color = OnSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Private, encrypted 1-on-1 messaging",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = OnSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // App name
-            Text(
-                text = "Twyn",
-                style = MaterialTheme.typography.displayLarge,
-                color = OnSurface,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Tagline
-            Text(
-                text = "Private, encrypted 1-on-1 messaging",
-                style = MaterialTheme.typography.bodyLarge,
-                color = OnSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Encryption badge
-            Surface(
-                color = Primary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(20.dp)
+            AnimatedVisibility(
+                visible = showContent,
+                enter = fadeIn(tween(500, delayMillis = 150))
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    color = Primary.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(20.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = Primary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "End-to-end encrypted",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Primary
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "End-to-end encrypted",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Primary
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // ── Sign-In Form ────────────────────────────────────
+            // Sign-In Form — staggered entrance
+            AnimatedVisibility(
+                visible = showContent,
+                enter = fadeIn(tween(400, delayMillis = 200)) + slideInVertically(
+                    initialOffsetY = { it / 6 },
+                    animationSpec = tween(400, delayMillis = 200, easing = FastOutSlowInEasing)
+                )
+            ) {
+                Column {
+                    OutlinedTextField(
+                        value = uiState.displayName,
+                        onValueChange = { viewModel.updateName(it) },
+                        label = { Text("Your Name") },
+                        placeholder = { Text("What should your contacts call you?") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Primary,
+                            unfocusedBorderColor = SurfaceLight,
+                            focusedContainerColor = Surface.copy(alpha = 0.5f),
+                            unfocusedContainerColor = Surface.copy(alpha = 0.5f)
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                        )
+                    )
 
-            // Display name
-            OutlinedTextField(
-                value = uiState.displayName,
-                onValueChange = { viewModel.updateName(it) },
-                label = { Text("Your Name") },
-                placeholder = { Text("What should your contacts call you?") },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Primary,
-                    unfocusedBorderColor = SurfaceLight,
-                    focusedContainerColor = Surface.copy(alpha = 0.5f),
-                    unfocusedContainerColor = Surface.copy(alpha = 0.5f)
-                ),
-                singleLine = true
-            )
+                    Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = uiState.bio,
+                        onValueChange = { viewModel.updateBio(it) },
+                        label = { Text("Bio (optional)") },
+                        placeholder = { Text("Tell people about yourself...") },
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Primary,
+                            unfocusedBorderColor = SurfaceLight,
+                            focusedContainerColor = Surface.copy(alpha = 0.5f),
+                            unfocusedContainerColor = Surface.copy(alpha = 0.5f)
+                        ),
+                        maxLines = 3,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                        )
+                    )
 
-            // Bio (optional)
-            OutlinedTextField(
-                value = uiState.bio,
-                onValueChange = { viewModel.updateBio(it) },
-                label = { Text("Bio (optional)") },
-                placeholder = { Text("Tell people about yourself...") },
-                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Primary,
-                    unfocusedBorderColor = SurfaceLight,
-                    focusedContainerColor = Surface.copy(alpha = 0.5f),
-                    unfocusedContainerColor = Surface.copy(alpha = 0.5f)
-                ),
-                maxLines = 3
-            )
+                    Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = uiState.serverUrl,
+                        onValueChange = { viewModel.updateServerUrl(it) },
+                        label = { Text("Server URL") },
+                        placeholder = { Text("wss://twyn-server.onrender.com/ws") },
+                        leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Primary,
+                            unfocusedBorderColor = SurfaceLight,
+                            focusedContainerColor = Surface.copy(alpha = 0.5f),
+                            unfocusedContainerColor = Surface.copy(alpha = 0.5f)
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (uiState.displayName.isNotBlank()) viewModel.signIn()
+                            }
+                        ),
+                        singleLine = true
+                    )
 
-            // Server URL
-            OutlinedTextField(
-                value = uiState.serverUrl,
-                onValueChange = { viewModel.updateServerUrl(it) },
-                label = { Text("Server URL") },
-                placeholder = { Text("wss://twyn-server.onrender.com/ws") },
-                leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Primary,
-                    unfocusedBorderColor = SurfaceLight,
-                    focusedContainerColor = Surface.copy(alpha = 0.5f),
-                    unfocusedContainerColor = Surface.copy(alpha = 0.5f)
-                ),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                singleLine = true
-            )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Server URL helper text
-            Text(
-                text = "Don't have a server? Your friend can share one, or host free on Render.com",
-                style = MaterialTheme.typography.bodySmall,
-                color = OnSurfaceVariant.copy(alpha = 0.7f)
-            )
+                    Text(
+                        text = "Don't have a server? Host free on Render.com",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OnSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Error message
+            // Error
             AnimatedVisibility(visible = uiState.error != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -220,23 +249,48 @@ fun WelcomeScreen(
 
             if (uiState.error != null) Spacer(modifier = Modifier.height(16.dp))
 
-            // Sign In button
-            Button(
-                onClick = { viewModel.signIn() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                shape = RoundedCornerShape(12.dp),
-                enabled = uiState.displayName.isNotBlank()
-            ) {
-                Icon(Icons.Default.ArrowForward, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Get Started",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+            // Sign In button — with press scale
+            AnimatedVisibility(
+                visible = showContent,
+                enter = fadeIn(tween(400, delayMillis = 350)) + slideInVertically(
+                    initialOffsetY = { it / 8 },
+                    animationSpec = tween(400, delayMillis = 350, easing = FastOutSlowInEasing)
                 )
+            ) {
+                var buttonPressed by remember { mutableStateOf(false) }
+                val buttonScale by animateFloatAsState(
+                    targetValue = if (buttonPressed) 0.96f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessHigh
+                    ),
+                    label = "btnScale"
+                )
+
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        viewModel.signIn()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .graphicsLayer {
+                            scaleX = buttonScale
+                            scaleY = buttonScale
+                        },
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = uiState.displayName.isNotBlank()
+                ) {
+                    Icon(Icons.Default.ArrowForward, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Get Started",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))

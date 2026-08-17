@@ -39,6 +39,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val profile by viewModel.profile.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     var showOnlineStatus by remember { mutableStateOf(profile.showOnlineStatus) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -176,13 +177,12 @@ fun SettingsScreen(
 
             SectionHeader("Appearance")
 
-            var isDarkTheme by remember { mutableStateOf(true) }
             SettingToggle(
                 title = "Dark Theme",
                 subtitle = "Use dark color scheme",
                 icon = Icons.Default.DarkMode,
                 checked = isDarkTheme,
-                onCheckedChange = { isDarkTheme = it }
+                onCheckedChange = { viewModel.toggleDarkTheme(it) }
             )
 
             SettingClickable(
@@ -221,7 +221,7 @@ fun SettingsScreen(
             SectionHeader("About")
 
             SettingClickable(
-                title = "Twyn v1.0.12",
+                title = "Twyn v1.0.18",
                 subtitle = "End-to-end encrypted 1-on-1 messaging",
                 icon = Icons.Default.Info,
                 onClick = onCheckUpdate

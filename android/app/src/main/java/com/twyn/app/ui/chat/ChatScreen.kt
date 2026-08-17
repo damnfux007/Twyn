@@ -59,6 +59,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.getMessages(pairingId).collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
+    val partnerName by viewModel.partnerName.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -72,12 +73,13 @@ fun ChatScreen(
     // Mark messages as read when screen is visible
     LaunchedEffect(pairingId) {
         viewModel.markAsRead(pairingId)
+        viewModel.loadPartnerName(pairingId)
     }
 
     Scaffold(
         topBar = {
             ChatTopBar(
-                pairingId = pairingId,
+                partnerName = partnerName,
                 isTyping = isTyping,
                 onOpenMedia = onOpenMedia,
                 onOpenCall = onOpenCall,
@@ -122,7 +124,7 @@ fun ChatScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatTopBar(
-    pairingId: String,
+    partnerName: String,
     isTyping: Boolean,
     onOpenMedia: () -> Unit,
     onOpenCall: (String) -> Unit,
@@ -132,7 +134,7 @@ private fun ChatTopBar(
         title = {
             Column {
                 Text(
-                    text = "Paired Contact",
+                    text = partnerName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )

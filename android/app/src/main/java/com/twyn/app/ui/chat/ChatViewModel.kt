@@ -3,6 +3,7 @@ package com.twyn.app.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twyn.app.data.repository.ChatRepository
+import com.twyn.app.data.repository.PairingRepository
 import com.twyn.app.domain.model.ChatMessage
 import com.twyn.app.domain.model.ContentType
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,15 +17,24 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val pairingRepository: PairingRepository
 ) : ViewModel() {
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
-    /**
-     * Get messages for a specific pairing as a reactive Flow.
-     */
+    private val _partnerName = MutableStateFlow("Chat")
+    val partnerName: StateFlow<String> = _partnerName.asStateFlow()
+
+    fun loadPartnerName(pairingId: String) {
+        viewModelScope.launch {
+            pairingRepository.getAllPairings().first().find { it.pairingId == pairingId }?.let {
+                _partnerName.value = it.partnerName
+            }
+        }
+    }
+
     fun getMessages(pairingId: String): StateFlow<List<ChatMessage>> {
         return chatRepository.getMessages(pairingId)
             .stateIn(
@@ -34,10 +44,6 @@ class ChatViewModel @Inject constructor(
             )
     }
 
-    /**
-     * Send a text message in this pairing.
-     * The message is encrypted client-side before being sent.
-     */
     fun sendMessage(pairingId: String, text: String, myUserId: String) {
         if (text.isBlank()) return
         viewModelScope.launch {
@@ -45,9 +51,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Mark all messages in this pairing as read.
-     */
     fun markAsRead(pairingId: String) {
         viewModelScope.launch {
             chatRepository.markAsRead(pairingId)

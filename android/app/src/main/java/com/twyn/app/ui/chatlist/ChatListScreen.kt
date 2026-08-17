@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,7 +20,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,20 +31,6 @@ import com.twyn.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-/**
- * Chat List screen — the home screen of Twyn.
- *
- * Shows a list of all active 1-on-1 paired chats, each as its own
- * independent chat thread. Similar to Signal's main screen.
- *
- * Features:
- * - Each pairing appears as a separate chat entry
- * - Unread message badges
- * - Last message preview
- * - "Pair New Contact" button (+ icon) to start new pairings
- * - Settings gear icon
- * - Smooth slide-in animations for list items
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
@@ -61,7 +51,22 @@ fun ChatListScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onOpenSettings) {
+                    var settingsPressed by remember { mutableStateOf(false) }
+                    val settingsScale by animateFloatAsState(
+                        targetValue = if (settingsPressed) 0.85f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessHigh
+                        ),
+                        label = "settingsScale"
+                    )
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = settingsScale
+                            scaleY = settingsScale
+                        }
+                    ) {
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "Settings"
@@ -74,12 +79,25 @@ fun ChatListScreen(
             )
         },
         floatingActionButton = {
-            // "Pair New Contact" button
+            var fabPressed by remember { mutableStateOf(false) }
+            val fabScale by animateFloatAsState(
+                targetValue = if (fabPressed) 0.9f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessHigh
+                ),
+                label = "fabScale"
+            )
+
             FloatingActionButton(
                 onClick = onPairNewContact,
                 containerColor = Primary,
                 contentColor = OnPrimary,
-                shape = CircleShape
+                shape = CircleShape,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = fabScale
+                    scaleY = fabScale
+                }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Pair New Contact")
             }
@@ -87,14 +105,12 @@ fun ChatListScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (pairings.isEmpty()) {
-            // Empty state
             EmptyState(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
             )
         } else {
-            // Pairings list with staggered entrance animations
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -129,19 +145,37 @@ fun ChatListScreen(
 }
 
 /**
- * Individual chat entry in the list.
- * Shows partner name, last message preview, timestamp, and unread badge.
+ * Individual chat entry with press-scale feedback.
  */
 @Composable
 private fun PairingChatEntry(
     pairing: Pairing,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "entryScale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -153,7 +187,6 @@ private fun PairingChatEntry(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar circle with initials
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -170,7 +203,6 @@ private fun PairingChatEntry(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Message content
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically
@@ -204,7 +236,6 @@ private fun PairingChatEntry(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Unread badge
                     if (pairing.unreadCount > 0) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
@@ -227,9 +258,6 @@ private fun PairingChatEntry(
     }
 }
 
-/**
- * Empty state shown when user has no pairings yet.
- */
 @Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
     Column(
@@ -258,14 +286,11 @@ private fun EmptyState(modifier: Modifier = Modifier) {
             text = "Tap the + button to pair with someone\nvia QR code",
             style = MaterialTheme.typography.bodyMedium,
             color = OnSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
     }
 }
 
-/**
- * Format a timestamp to a relative or absolute time string.
- */
 private fun formatTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp

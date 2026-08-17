@@ -29,12 +29,13 @@ class PairingRepository @Inject constructor(
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun generatePairingQrCode(userId: String): Bitmap {
+    fun generatePairingQrCode(userId: String, displayName: String = ""): Bitmap {
         val bundle = encryptionManager.generatePreKeyBundle()
         val bundleBase64 = encryptionManager.encodePreKeyBundleForQr(bundle)
         val pairingToken = UUID.randomUUID().toString().take(8)
 
-        val qrContent = "twyn:$userId:$bundleBase64:$pairingToken"
+        // twyn:userId:bundleBase64:pairingToken:displayName
+        val qrContent = "twyn:$userId:$bundleBase64:$pairingToken:$displayName"
 
         val writer = QRCodeWriter()
         val bitMatrix = writer.encode(qrContent, BarcodeFormat.QR_CODE, 512, 512)
@@ -59,6 +60,7 @@ class PairingRepository @Inject constructor(
 
             val partnerId = parts[1]
             val preKeyBundleBase64 = parts[2]
+            val partnerName = if (parts.size >= 5 && parts[4].isNotBlank()) parts[4] else "Contact ${partnerId.take(8)}"
 
             if (partnerId == myUserId) {
                 return Result.failure(Exception("Cannot pair with yourself"))
@@ -89,7 +91,7 @@ class PairingRepository @Inject constructor(
             val pairing = Pairing(
                 pairingId = pairingId,
                 partnerId = partnerId,
-                partnerName = "Contact ${partnerId.take(6)}",
+                partnerName = partnerName,
                 createdAt = System.currentTimeMillis()
             )
 
@@ -123,5 +125,9 @@ class PairingRepository @Inject constructor(
                 )
             }
         }
+    }
+
+    suspend fun updatePartnerName(partnerId: String, name: String) {
+        pairingDao.updatePartnerNameByPartnerId(partnerId, name)
     }
 }

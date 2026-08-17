@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.provider.Settings
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,9 +49,15 @@ class PreferencesManager @Inject constructor(
         get() = prefs.getString(KEY_PROFILE_PHOTO, "") ?: ""
         set(value) = prefs.edit().putString(KEY_PROFILE_PHOTO, value).apply()
 
+    private val _darkThemeFlow = MutableStateFlow(prefs.getBoolean(KEY_DARK_THEME, true))
+    val darkThemeFlow: StateFlow<Boolean> = _darkThemeFlow.asStateFlow()
+
     var isDarkTheme: Boolean
         get() = prefs.getBoolean(KEY_DARK_THEME, true)
-        set(value) = prefs.edit().putBoolean(KEY_DARK_THEME, value).apply()
+        set(value) {
+            prefs.edit().putBoolean(KEY_DARK_THEME, value).apply()
+            _darkThemeFlow.value = value
+        }
 
     var showOnlineStatus: Boolean
         get() = prefs.getBoolean(KEY_SHOW_ONLINE, true)

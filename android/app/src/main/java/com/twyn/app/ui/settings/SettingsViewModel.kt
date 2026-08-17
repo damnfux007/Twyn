@@ -19,6 +19,8 @@ class SettingsViewModel @Inject constructor(
     private val _profile = MutableStateFlow(UserProfile(userId = "", displayName = ""))
     val profile: StateFlow<UserProfile> = _profile.asStateFlow()
 
+    val isDarkTheme: StateFlow<Boolean> = preferencesManager.darkThemeFlow
+
     init {
         _profile.value = profileRepository.getLocalProfile()
     }
@@ -47,5 +49,9 @@ class SettingsViewModel @Inject constructor(
     fun updateProfilePhoto(localPath: String) {
         preferencesManager.profilePhotoUrl = localPath
         _profile.value = _profile.value.copy(profilePhotoUrl = localPath)
+    }
+
+    fun toggleDarkTheme(enabled: Boolean) {
+        preferencesManager.isDarkTheme = enabled
     }
 }

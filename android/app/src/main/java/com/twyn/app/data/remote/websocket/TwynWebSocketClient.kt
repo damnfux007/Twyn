@@ -56,8 +56,16 @@ class TwynWebSocketClient(
 
     /**
      * Connect to the WebSocket server and authenticate.
+     * Idempotent — calling while already connected/connecting is a no-op.
      */
     fun connect(userId: String) {
+        if (_connectionState.value == ConnectionState.CONNECTING ||
+            _connectionState.value == ConnectionState.CONNECTED ||
+            _connectionState.value == ConnectionState.AUTHENTICATED
+        ) {
+            Log.i(TAG, "Already connected or connecting, skipping")
+            return
+        }
         authUserId = userId
         _connectionState.value = ConnectionState.CONNECTING
 
@@ -65,51 +73,7 @@ class TwynWebSocketClient(
             .url(serverUrl)
             .build()
 
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.i(TAG, "WebSocket connected")
-                _connectionState.value = ConnectionState.CONNECTED
-                reconnectAttempt = 0
-
-                // Authenticate immediately
-                val authMsg = WsMessage(type = "AUTH", payload = userId)
-                webSocket.send(json.encodeToString(authMsg))
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                try {
-                    val message = json.decodeFromString<WsMessage>(text)
-                    scope.launch {
-                        _incomingMessages.emit(message)
-                    }
-
-                    // Handle auth response
-                    if (message.type == "AUTH_OK") {
-                        isAuthenticated = true
-                        _connectionState.value = ConnectionState.AUTHENTICATED
-                        scope.launch { flushPendingMessages() }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to parse WebSocket message", e)
-                }
-            }
-
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Log.i(TAG, "WebSocket closing: $code $reason")
-                webSocket.close(1000, null)
-                handleDisconnect()
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.i(TAG, "WebSocket closed: $code $reason")
-                handleDisconnect()
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket failure", t)
-                handleDisconnect()
-            }
-        })
+        webSocket = client.newWebSocket(request, createListener())
 
         // Start reconnection coroutine
         scope.launch { reconnectLoop() }
@@ -170,9 +134,56 @@ class TwynWebSocketClient(
                 reconnectAttempt++
                 Log.i(TAG, "Reconnecting in ${delayMs}ms (attempt $reconnectAttempt)")
                 delay(delayMs)
-                connect(authUserId!!)
+                // Reset state so connect() won't early-return
+                _connectionState.value = ConnectionState.DISCONNECTED
+                val userId = authUserId ?: return
+                authUserId = userId
+                _connectionState.value = ConnectionState.CONNECTING
+
+                val request = Request.Builder().url(serverUrl).build()
+                webSocket = client.newWebSocket(request, createListener())
             }
             delay(1000)
+        }
+    }
+
+    private fun createListener() = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+            Log.i(TAG, "WebSocket connected")
+            _connectionState.value = ConnectionState.CONNECTED
+            reconnectAttempt = 0
+            val authMsg = WsMessage(type = "AUTH", payload = authUserId ?: return)
+            webSocket.send(json.encodeToString(authMsg))
+        }
+
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            try {
+                val message = json.decodeFromString<WsMessage>(text)
+                scope.launch { _incomingMessages.emit(message) }
+                if (message.type == "AUTH_OK") {
+                    isAuthenticated = true
+                    _connectionState.value = ConnectionState.AUTHENTICATED
+                    scope.launch { flushPendingMessages() }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse WebSocket message", e)
+            }
+        }
+
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            Log.i(TAG, "WebSocket closing: $code $reason")
+            webSocket.close(1000, null)
+            handleDisconnect()
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            Log.i(TAG, "WebSocket closed: $code $reason")
+            handleDisconnect()
+        }
+
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            Log.e(TAG, "WebSocket failure", t)
+            handleDisconnect()
         }
     }
 

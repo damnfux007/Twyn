@@ -51,6 +51,9 @@ interface PairingDao {
 
     @Query("UPDATE pairings SET lastMessage = :message, lastMessageTimestamp = :timestamp WHERE pairingId = :pairingId")
     suspend fun updateLastMessage(pairingId: String, message: String, timestamp: Long)
+
+    @Query("UPDATE pairings SET partnerName = :name WHERE partnerId = :partnerId")
+    suspend fun updatePartnerNameByPartnerId(partnerId: String, name: String)
 }
 
 @Dao
