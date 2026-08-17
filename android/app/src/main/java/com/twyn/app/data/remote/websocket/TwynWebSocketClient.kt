@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.*
+import com.twyn.app.domain.model.WsMessage
 import java.util.concurrent.TimeUnit
 
 /**
@@ -86,7 +87,7 @@ class TwynWebSocketClient(
                     if (message.type == "AUTH_OK") {
                         isAuthenticated = true
                         _connectionState.value = ConnectionState.AUTHENTICATED
-                        flushPendingMessages()
+                        scope.launch { flushPendingMessages() }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse WebSocket message", e)

@@ -98,8 +98,8 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // ── Signal Protocol (E2E Encryption) ───────────────────────────
-    // Uses the libsignal library (Signal's open-source crypto library)
-    implementation("org.signal:libsignal-client:0.36.0")
+    // TODO: Re-integrate libsignal when API is stable; using AES placeholder for now
+    // implementation("org.signal:libsignal-client:0.36.0")
 
     // ── CameraX (QR code scanning) ─────────────────────────────────
     val cameraxVersion = "1.3.1"
@@ -113,6 +113,7 @@ dependencies {
 
     // ── ZXing (QR code generation) ─────────────────────────────────
     implementation("com.github.alexzhirkevich:custom-qr-generator:1.6.2")
+    implementation("com.google.zxing:core:3.5.3")
 
     // ── Accompanist (Permissions) ──────────────────────────────────
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")

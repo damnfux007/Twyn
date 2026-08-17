@@ -65,12 +65,9 @@ data class UserProfile(
 
 /** Encryption key pair for a specific pairing. */
 data class PairingKeys(
-    val identityKeyPair: org.signal.libsignal.protocol.IdentityKeyPair,
-    val registrationId: Int,
-    val sessionStore: com.twyn.app.encryption.TwynSessionStore,
-    val preKeyStore: com.twyn.app.encryption.TwynPreKeyStore,
-    val signedPreKeyStore: com.twyn.app.encryption.TwynSignedPreKeyStore,
-    val identityKeyStore: com.twyn.app.encryption.TwynIdentityKeyStore
+    val publicKey: String,
+    val privateKey: String,
+    val registrationId: Int
 )
 
 /** Media file metadata. */

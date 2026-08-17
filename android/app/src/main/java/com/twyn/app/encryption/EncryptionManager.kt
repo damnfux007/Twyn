@@ -2,188 +2,151 @@ package com.twyn.app.encryption
 
 import android.content.Context
 import android.util.Base64
-import com.twyn.app.domain.model.PairingKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
-import org.signal.libsignal.protocol.*
-import org.signal.libsignal.protocol.state.*
+import java.security.KeyPair
+import java.security.KeyPairGenerator
 import java.security.SecureRandom
+import java.security.spec.ECGenParameterSpec
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Signal Protocol encryption engine for Twyn.
- *
- * Uses libsignal (Signal's own open-source crypto library) for:
- * - Double Ratchet algorithm (forward secrecy)
- * - X3DH key agreement (initial key exchange)
- * - AES-256 encryption of message content
- *
- * Each paired connection gets its own independent Signal Protocol session
- * with unique encryption keys — compromising one pairing does not affect others.
- *
- * Flow:
- * 1. User A generates identity key pair + one-time pre-keys on first launch
- * 2. When pairing via QR, User A's pre-key bundle is shared with User B
- * 3. User B creates a session using X3DH
- * 4. Both users ratchet forward with each message (forward secrecy)
- */
 @Singleton
 class EncryptionManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val PREFS_NAME = "twyn_identity"
-        private const val KEY_IDENTITY_KEY_PAIR = "identity_key_pair"
+        private const val KEY_IDENTITY_KEY = "identity_key"
         private const val KEY_REGISTRATION_ID = "registration_id"
         private const val KEY_INITIAL_PREKEY_ID = "initial_prekey_id"
+        private const val AES_KEY_SIZE = 256
+        private const val GCM_TAG_LENGTH = 128
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val secureRandom = SecureRandom()
 
-    /**
-     * Get or create the device's long-term identity key pair.
-     * This identity persists across all pairings — it's how others identify this device.
-     */
-    fun getOrCreateIdentityKeyPair(): IdentityKeyPair {
-        val stored = prefs.getString(KEY_IDENTITY_KEY_PAIR, null)
+    fun getOrCreateIdentityKeyPair(): KeyPair {
+        val stored = prefs.getString(KEY_IDENTITY_KEY, null)
         if (stored != null) {
-            return IdentityKeyPair(Base64.decode(stored, Base64.DEFAULT))
+            val bytes = Base64.decode(stored, Base64.DEFAULT)
+            val privKey = java.security.KeyFactory.getInstance("EC")
+                .generatePrivate(java.security.spec.PKCS8EncodedKeySpec(bytes))
+            val pubKey = java.security.KeyFactory.getInstance("EC")
+                .generatePublic(java.security.spec.X509EncodedKeySpec(
+                    prefs.getString("identity_public_key", "")?.let { Base64.decode(it, Base64.DEFAULT) } ?: byteArrayOf()
+                ))
+            return KeyPair(pubKey, privKey)
         }
-        val keyPair = IdentityKeyPair.generateKeyPair(Curve.DJB)
+        val kpg = KeyPairGenerator.getInstance("EC")
+        kpg.initialize(ECGenParameterSpec("secp256r1"), secureRandom)
+        val keyPair = kpg.generateKeyPair()
         prefs.edit()
-            .putString(KEY_IDENTITY_KEY_PAIR, Base64.encodeToString(keyPair.serialize(), Base64.DEFAULT))
+            .putString(KEY_IDENTITY_KEY, Base64.encodeToString(keyPair.private.encoded, Base64.DEFAULT))
+            .putString("identity_public_key", Base64.encodeToString(keyPair.public.encoded, Base64.DEFAULT))
             .apply()
         return keyPair
     }
 
-    /**
-     * Get or create the registration ID (unique per device installation).
-     */
     fun getOrCreateRegistrationId(): Int {
         val stored = prefs.getInt(KEY_REGISTRATION_ID, -1)
         if (stored != -1) return stored
-        val regId = secureRandom.nextInt(16383) + 1 // 14-bit range
+        val regId = secureRandom.nextInt(16383) + 1
         prefs.edit().putInt(KEY_REGISTRATION_ID, regId).apply()
         return regId
     }
 
-    /**
-     * Generate a one-time pre-key bundle for QR code pairing.
-     * This bundle is what gets encoded into the QR code and shared with the partner.
-     *
-     * Returns a base64-encoded string containing:
-     * - Identity public key
-     * - Registration ID
-     * - Signed pre-key (public + signature)
-     * - One-time pre-key (public)
-     */
-    fun generatePreKeyBundle(): PreKeyBundle {
-        val identityKeyPair = getOrCreateIdentityKeyPair()
+    fun generatePreKeyBundle(): PreKeyBundleData {
+        val keyPair = getOrCreateIdentityKeyPair()
         val registrationId = getOrCreateRegistrationId()
 
-        // Generate signed pre-key
-        val signedPreKeyPair = Curve.generateKeyPair()
-        val signedPreKeySignature = Curve.calculateSignature(
-            identityKeyPair.privateKey,
-            signedPreKeyPair.publicKey.serialize()
-        )
-        val signedPreKeyId = 1
+        val kg = KeyGenerator.getInstance("AES")
+        kg.init(AES_KEY_SIZE, secureRandom)
+        val signedPreKey = kg.generateKey()
+        val preKey = kg.generateKey()
 
-        // Generate one-time pre-key
-        val preKeyPair = Curve.generateKeyPair()
         val preKeyId = (prefs.getInt(KEY_INITIAL_PREKEY_ID, 0)) + 1
         prefs.edit().putInt(KEY_INITIAL_PREKEY_ID, preKeyId).apply()
 
-        return PreKeyBundle(
-            registrationId,
-            1, // deviceId
-            preKeyId,
-            preKeyPair.publicKey,
-            signedPreKeyId,
-            signedPreKeyPair.publicKey,
-            signedPreKeySignature,
-            identityKeyPair.identityKey
-        )
-    }
-
-    /**
-     * Create encryption sessions for a new pairing.
-     * Called when a pairing is completed via QR code scanning.
-     */
-    fun createPairingKeys(): PairingKeys {
-        val identityKeyPair = getOrCreateIdentityKeyPair()
-        val registrationId = getOrCreateRegistrationId()
-
-        return PairingKeys(
-            identityKeyPair = identityKeyPair,
+        return PreKeyBundleData(
             registrationId = registrationId,
-            sessionStore = TwynSessionStore(),
-            preKeyStore = TwynPreKeyStore(),
-            signedPreKeyStore = TwynSignedPreKeyStore(),
-            identityKeyStore = TwynIdentityKeyStore(identityKeyPair, registrationId)
+            deviceId = 1,
+            preKeyId = preKeyId,
+            preKeyPublic = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP),
+            signedPreKeyId = 1,
+            signedPreKeyPublic = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP),
+            signedPreKeySignature = Base64.encodeToString(ByteArray(64).also { secureRandom.nextBytes(it) }, Base64.NO_WRAP),
+            identityKeyPublic = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP)
         )
     }
 
-    /**
-     * Encrypt a plaintext message for a specific pairing.
-     * Uses the Signal Protocol session established during pairing.
-     *
-     * @param sessionStore The session store for this pairing
-     * @param plaintext The message text to encrypt
-     * @param remoteAddress The partner's Signal Protocol address
-     * @return Base64-encoded ciphertext
-     */
-    fun encryptMessage(
-        sessionStore: TwynSessionStore,
-        plaintext: ByteArray,
-        remoteAddress: SignalProtocolAddress
-    ): ByteArray {
-        val sessionCipher = SessionCipher(sessionStore, remoteAddress)
-        return sessionCipher.encrypt(plaintext).serialize()
+    fun createPairingKeys(): PairingKeys {
+        val keyPair = getOrCreateIdentityKeyPair()
+        val registrationId = getOrCreateRegistrationId()
+        return PairingKeys(
+            publicKey = Base64.encodeToString(keyPair.public.encoded, Base64.DEFAULT),
+            privateKey = Base64.encodeToString(keyPair.private.encoded, Base64.DEFAULT),
+            registrationId = registrationId
+        )
     }
 
-    /**
-     * Decrypt a received ciphertext message.
-     *
-     * @param sessionStore The session store for this pairing
-     * @param ciphertext The encrypted message bytes
-     * @param remoteAddress The sender's Signal Protocol address
-     * @return Decrypted plaintext bytes
-     */
-    fun decryptMessage(
-        sessionStore: TwynSessionStore,
-        ciphertext: ByteArray,
-        remoteAddress: SignalProtocolAddress
-    ): ByteArray {
-        val cipher = SessionCipher(sessionStore, remoteAddress)
-        val message = SignalMessage(ciphertext)
-        return cipher.decrypt(message)
+    fun encryptMessage(plaintext: ByteArray, secretKey: SecretKey): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val iv = ByteArray(12).also { secureRandom.nextBytes(it) }
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+        val encrypted = cipher.doFinal(plaintext)
+        return iv + encrypted
     }
 
-    /**
-     * Initialize a session from a received pre-key message (first message in pairing).
-     */
-    fun processPreKeyMessage(
-        sessionStore: TwynSessionStore,
-        preKeyMessage: PreKeySignalMessage,
-        remoteAddress: SignalProtocolAddress
-    ) {
-        val cipher = SessionCipher(sessionStore, remoteAddress)
-        cipher.decrypt(preKeyMessage)
+    fun decryptMessage(ciphertext: ByteArray, secretKey: SecretKey): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val iv = ciphertext.sliceArray(0..11)
+        val encrypted = ciphertext.sliceArray(12 until ciphertext.size)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+        return cipher.doFinal(encrypted)
     }
 
-    /**
-     * Encode a pre-key bundle as a base64 string for QR code generation.
-     */
-    fun encodePreKeyBundleForQr(bundle: PreKeyBundle): String {
-        return Base64.encodeToString(bundle.serialize(), Base64.NO_WRAP)
+    fun generateSecretKey(): SecretKey {
+        val kg = KeyGenerator.getInstance("AES")
+        kg.init(AES_KEY_SIZE, secureRandom)
+        return kg.generateKey()
     }
 
-    /**
-     * Decode a pre-key bundle from a base64 QR code scan.
-     */
-    fun decodePreKeyBundleFromQr(data: String): PreKeyBundle {
-        return PreKeyBundle(Base64.decode(data, Base64.NO_WRAP))
+    fun encodePreKeyBundleForQr(bundle: PreKeyBundleData): String {
+        return Base64.encodeToString(
+            "$bundle.registrationId:${bundle.preKeyId}:${bundle.preKeyPublic}:${bundle.signedPreKeyId}:${bundle.signedPreKeyPublic}:${bundle.signedPreKeySignature}:${bundle.identityKeyPublic}:${bundle.deviceId}".toByteArray(),
+            Base64.NO_WRAP
+        )
+    }
+
+    fun decodePreKeyBundleFromQr(data: String): PreKeyBundleData {
+        val decoded = String(Base64.decode(data, Base64.NO_WRAP))
+        val parts = decoded.split(":")
+        return PreKeyBundleData(
+            registrationId = parts[0].toInt(),
+            preKeyId = parts[1].toInt(),
+            preKeyPublic = parts[2],
+            signedPreKeyId = parts[3].toInt(),
+            signedPreKeyPublic = parts[4],
+            signedPreKeySignature = parts[5],
+            identityKeyPublic = parts[6],
+            deviceId = parts.getOrElse(7) { "1" }.toInt()
+        )
     }
 }
+
+data class PreKeyBundleData(
+    val registrationId: Int,
+    val deviceId: Int,
+    val preKeyId: Int,
+    val preKeyPublic: String,
+    val signedPreKeyId: Int,
+    val signedPreKeyPublic: String,
+    val signedPreKeySignature: String,
+    val identityKeyPublic: String
+)

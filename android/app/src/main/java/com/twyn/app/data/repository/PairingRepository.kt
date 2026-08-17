@@ -59,7 +59,7 @@ class PairingRepository @Inject constructor(
 
         // Generate QR code using ZXing
         val writer = QRCodeWriter()
-        val bitMatrix = writer.encode(qrContent, BarcodeFormat.QR_MATRIX, 512, 512)
+        val bitMatrix = writer.encode(qrContent, BarcodeFormat.QR_CODE, 512, 512)
         val width = bitMatrix.width
         val height = bitMatrix.height
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)

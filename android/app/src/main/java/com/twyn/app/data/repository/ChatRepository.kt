@@ -102,18 +102,17 @@ class ChatRepository @Inject constructor(
         // Send via WebSocket
         val wsMessage = com.twyn.app.domain.model.WsMessage(
             type = "SEND_MESSAGE",
-            payload = kotlinx.serialization.encodeToString(
-                kotlinx.serialization.json.Json {
+            payload = kotlinx.serialization.json.Json {
                     encodeDefaults = true
-                },
-                mapOf(
-                    "messageId" to messageId,
-                    "pairingId" to pairingId,
-                    "senderId" to myUserId,
-                    "ciphertext" to ciphertext,
-                    "contentType" to "TEXT"
+                }.encodeToString(
+                    mapOf(
+                        "messageId" to messageId,
+                        "pairingId" to pairingId,
+                        "senderId" to myUserId,
+                        "ciphertext" to ciphertext,
+                        "contentType" to "TEXT"
+                    )
                 )
-            )
         )
         webSocketClient.send(wsMessage)
     }

@@ -100,7 +100,7 @@ class LocationRepository @Inject constructor(
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 fusedLocationClient.removeLocationUpdates(this)
-                if (cont.isActive) cont.resume(result.lastLocation)
+                cont.resume(result.lastLocation)
             }
         }
 
