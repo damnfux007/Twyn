@@ -137,18 +137,14 @@ private fun ChatTopBar(
                     fontWeight = FontWeight.Medium
                 )
                 if (isTyping) {
-                    // Animated typing indicator
                     val dots = remember { listOf(".", "..", "...") }
-                    val infiniteTransition = rememberInfiniteTransition(label = "typing")
-                    val dotIndex by infiniteTransition.animateInt(
-                        initialValue = 0,
-                        targetValue = 2,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(500),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "dotIndex"
-                    )
+                    var dotIndex by remember { mutableIntStateOf(0) }
+                    LaunchedEffect(Unit) {
+                        while (true) {
+                            dotIndex = (dotIndex + 1) % 3
+                            kotlinx.coroutines.delay(500)
+                        }
+                    }
                     Text(
                         text = "typing${dots[dotIndex]}",
                         style = MaterialTheme.typography.bodySmall,

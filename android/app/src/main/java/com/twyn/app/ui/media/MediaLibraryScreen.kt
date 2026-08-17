@@ -155,13 +155,27 @@ private fun MediaGridItem(media: MediaFile) {
             when {
                 media.contentType.startsWith("image/") -> {
                     // Show image thumbnail
-                    media.thumbnailUrl?.let { url ->
+                    media.localPath?.let { path ->
                         AsyncImage(
-                            model = url,
+                            model = java.io.File(path),
                             contentDescription = media.fileName,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+                    } ?: media.thumbnailBase64?.let { base64 ->
+                        val bitmap = remember(base64) {
+                            android.util.Base64.decode(base64, android.util.Base64.DEFAULT).let { bytes ->
+                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            }
+                        }
+                        bitmap?.let {
+                            AsyncImage(
+                                model = it,
+                                contentDescription = media.fileName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     } ?: Icon(
                         Icons.Default.Image,
                         contentDescription = null,

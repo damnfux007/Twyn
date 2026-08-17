@@ -2,6 +2,7 @@ package com.twyn.app.encryption
 
 import android.content.Context
 import android.util.Base64
+import com.twyn.app.domain.model.PairingKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.KeyPair
 import java.security.KeyPairGenerator

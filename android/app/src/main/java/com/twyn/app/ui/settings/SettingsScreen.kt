@@ -119,7 +119,7 @@ fun SettingsScreen(
                 placeholder = "Tell your contacts about yourself..."
             )
 
-            HorizontalDivider(
+            Divider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = SurfaceLight
             )
@@ -139,7 +139,7 @@ fun SettingsScreen(
                 }
             )
 
-            HorizontalDivider(
+            Divider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = SurfaceLight
             )
@@ -165,7 +165,7 @@ fun SettingsScreen(
                 onClick = { /* Open theme picker */ }
             )
 
-            HorizontalDivider(
+            Divider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = SurfaceLight
             )
@@ -187,7 +187,7 @@ fun SettingsScreen(
                 onClick = { /* Open Google Sign-In */ }
             )
 
-            HorizontalDivider(
+            Divider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 color = SurfaceLight
             )

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twyn.app.data.repository.PairingRepository
 import com.twyn.app.data.repository.ProfileRepository
+import com.twyn.app.util.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +20,8 @@ import javax.inject.Inject
 @HiltViewModel
 class PairingViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PairingUiState())
@@ -29,10 +31,6 @@ class PairingViewModel @Inject constructor(
         generateQrCode()
     }
 
-    /**
-     * Generate a new QR code for pairing.
-     * Contains the user's pre-key bundle for Signal Protocol key exchange.
-     */
     private fun generateQrCode() {
         viewModelScope.launch {
             val profile = profileRepository.getLocalProfile()
@@ -41,6 +39,19 @@ class PairingViewModel @Inject constructor(
                 qrBitmap = bitmap,
                 pairingCode = profile.userId.take(8).uppercase()
             )
+        }
+    }
+
+    fun processScannedQr(qrContent: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            val userId = profileRepository.getLocalProfile().userId
+            val result = pairingRepository.processScannedQrCode(qrContent, userId)
+            result.onSuccess {
+                _uiState.value = _uiState.value.copy(isSuccess = true)
+                onComplete()
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(statusMessage = e.message)
+            }
         }
     }
 }
