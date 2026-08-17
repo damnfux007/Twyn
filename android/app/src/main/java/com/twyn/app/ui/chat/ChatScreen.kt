@@ -33,6 +33,7 @@ import coil.compose.AsyncImage
 import com.twyn.app.domain.model.ChatMessage
 import com.twyn.app.domain.model.ContentType
 import com.twyn.app.ui.theme.*
+import com.twyn.app.util.PreferencesManager
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -53,6 +54,10 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val chatThemeIndex by remember {
+        val prefs = PreferencesManager(context)
+        prefs.chatThemeIndexFlow
+    }.collectAsState()
 
     val photoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -137,7 +142,7 @@ fun ChatScreen(
                     items = messages,
                     key = { it.messageId }
                 ) { message ->
-                    AnimatedMessageBubble(message = message)
+                    AnimatedMessageBubble(message = message, chatThemeIndex = chatThemeIndex)
                 }
             }
         }
@@ -216,7 +221,7 @@ private fun ChatInputBar(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 40.dp),
-                placeholder = { Text("iMessage") },
+                placeholder = { Text("Message") },
                 shape = RoundedCornerShape(20.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedBorderColor = SurfaceLight,
@@ -264,7 +269,7 @@ private fun ChatInputBar(
 }
 
 @Composable
-private fun AnimatedMessageBubble(message: ChatMessage) {
+private fun AnimatedMessageBubble(message: ChatMessage, chatThemeIndex: Int = 0) {
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(message.messageId) { appeared = true }
 
@@ -292,13 +297,12 @@ private fun AnimatedMessageBubble(message: ChatMessage) {
             .padding(vertical = 1.dp, horizontal = 4.dp),
         contentAlignment = if (message.isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        MessageBubble(message = message)
+        MessageBubble(message = message, chatThemeIndex = chatThemeIndex)
     }
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage) {
-    val chatThemeIndex = 0
+private fun MessageBubble(message: ChatMessage, chatThemeIndex: Int = 0) {
     val theme = ChatThemes.all.getOrNull(chatThemeIndex) ?: ChatThemes.blue
 
     val bubbleColor = if (message.isFromMe) theme.sentBg else theme.receivedBg

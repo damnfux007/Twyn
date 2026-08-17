@@ -1,5 +1,9 @@
 package com.twyn.app.ui.location
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -7,24 +11,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.twyn.app.ui.theme.*
 
-/**
- * Location sharing screen.
- *
- * On-demand only — no background tracking, minimal battery use.
- *
- * How it works:
- * 1. Tap "Request Location" → sends request to partner's phone
- * 2. Partner's phone wakes briefly → grabs fresh GPS reading
- * 3. Location data returned → displayed on OpenStreetMap
- *
- * Display uses OpenStreetMap (osmdroid) — free, no API key needed.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationShareScreen(
@@ -35,6 +29,22 @@ fun LocationShareScreen(
     val partnerLocation by viewModel.partnerLocation.collectAsState()
     val myLocation by viewModel.myLocation.collectAsState()
     var hasRequested by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            viewModel.shareMyLocation()
+        }
+    }
+
+    fun hasLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
 
     Scaffold(
         topBar = {
@@ -59,7 +69,6 @@ fun LocationShareScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Info card
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = Primary.copy(alpha = 0.1f)
@@ -77,8 +86,7 @@ fun LocationShareScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Location is shared on-demand only. " +
-                               "No background tracking. Minimal battery use.",
+                        text = "Location is shared on-demand only. No background tracking. Minimal battery use.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = OnSurfaceVariant
                     )
@@ -87,7 +95,6 @@ fun LocationShareScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Map placeholder — in production, use osmdroid MapView
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -98,8 +105,6 @@ fun LocationShareScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    // OpenStreetMap would be rendered here via osmdroid
-                    // MapView(context) with markers for both users' locations
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             Icons.Default.Map,
@@ -122,21 +127,28 @@ fun LocationShareScreen(
                                 fontWeight = FontWeight.Medium
                             )
                         }
+
+                        myLocation?.let { loc ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "You: ${loc.latitude}, ${loc.longitude}",
+                                color = OnlineGreen,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Request partner's location
                 Button(
                     onClick = {
-                        viewModel.requestPartnerLocation(pairingId, "local_user")
+                        viewModel.requestPartnerLocation(pairingId)
                         hasRequested = true
                     },
                     modifier = Modifier.weight(1f),
@@ -147,9 +159,19 @@ fun LocationShareScreen(
                     Text("Request Location")
                 }
 
-                // Share my location
                 OutlinedButton(
-                    onClick = { viewModel.shareMyLocation() },
+                    onClick = {
+                        if (hasLocationPermission()) {
+                            viewModel.shareMyLocation()
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.ShareLocation, contentDescription = null)

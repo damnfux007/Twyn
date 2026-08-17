@@ -16,11 +16,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import javax.inject.Inject
 
-/**
- * ViewModel for the Chat List (home) screen.
- * Shows all active 1-on-1 paired chats.
- * Also manages the WebSocket connection lifecycle and incoming message routing.
- */
 @HiltViewModel
 class ChatListViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
@@ -52,7 +47,7 @@ class ChatListViewModel @Inject constructor(
             webSocketClient.incomingMessages.collect { message ->
                 try {
                     when (message.type) {
-                        "NEW_MESSAGE" -> {
+                        "INCOMING_MESSAGE" -> {
                             val payload = Json.parseToJsonElement(message.payload) as? JsonObject ?: return@collect
                             val chatMessage = ChatMessage(
                                 messageId = payload["messageId"]?.jsonPrimitive?.content ?: return@collect,
@@ -62,21 +57,45 @@ class ChatListViewModel @Inject constructor(
                                 contentType = ContentType.valueOf(
                                     payload["contentType"]?.jsonPrimitive?.content ?: "TEXT"
                                 ),
-                                timestamp = payload["timestamp"]?.jsonPrimitive?.long
-                                    ?: System.currentTimeMillis(),
+                                timestamp = System.currentTimeMillis(),
                                 isFromMe = false,
                                 isDelivered = true,
-                                decryptedText = payload["plaintext"]?.jsonPrimitive?.content
-                                    ?: payload["ciphertext"]?.jsonPrimitive?.content
+                                decryptedText = payload["ciphertext"]?.jsonPrimitive?.content
                             )
                             chatRepository.receiveMessage(chatMessage)
                             Log.i("ChatListVM", "Stored incoming message: ${chatMessage.messageId}")
                         }
-                        "PARTNER_PROFILE" -> {
+                        "PAIRING_COMPLETE" -> {
                             val payload = Json.parseToJsonElement(message.payload) as? JsonObject ?: return@collect
-                            val partnerId = payload["partnerId"]?.jsonPrimitive?.content ?: return@collect
-                            val partnerName = payload["displayName"]?.jsonPrimitive?.content ?: return@collect
-                            pairingRepository.updatePartnerName(partnerId, partnerName)
+                            val serverPairingId = payload["pairingId"]?.jsonPrimitive?.content ?: return@collect
+                            val userAId = payload["userAId"]?.jsonPrimitive?.content ?: return@collect
+                            val userBId = payload["userBId"]?.jsonPrimitive?.content ?: return@collect
+
+                            val myUserId = preferencesManager.userId
+                            val partnerId = if (userAId == myUserId) userBId else userAId
+
+                            pairingRepository.handlePairingComplete(serverPairingId, partnerId)
+                            Log.i("ChatListVM", "Pairing complete: $serverPairingId with $partnerId")
+                        }
+                        "MESSAGE_DELIVERED" -> {
+                            Log.i("ChatListVM", "Message delivered: ${message.payload}")
+                        }
+                        "LOCATION_REQUEST" -> {
+                            val payload = Json.parseToJsonElement(message.payload) as? JsonObject ?: return@collect
+                            val requesterId = payload["requesterId"]?.jsonPrimitive?.content ?: return@collect
+                            Log.i("ChatListVM", "Location request from: $requesterId")
+                        }
+                        "LOCATION_RESPONSE" -> {
+                            Log.i("ChatListVM", "Location response received")
+                        }
+                        "AUTH_OK" -> {
+                            Log.i("ChatListVM", "Authenticated successfully")
+                        }
+                        "PONG" -> {
+                            Log.d("ChatListVM", "Pong received")
+                        }
+                        else -> {
+                            Log.d("ChatListVM", "Unhandled message type: ${message.type}")
                         }
                     }
                 } catch (e: Exception) {

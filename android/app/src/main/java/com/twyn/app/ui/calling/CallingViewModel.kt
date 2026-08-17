@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twyn.app.data.repository.CallingRepository
 import com.twyn.app.data.repository.PairingRepository
+import com.twyn.app.util.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -13,7 +14,8 @@ import javax.inject.Inject
 @HiltViewModel
 class CallingViewModel @Inject constructor(
     private val callingRepository: CallingRepository,
-    private val pairingRepository: PairingRepository
+    private val pairingRepository: PairingRepository,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
     private val _callState = MutableStateFlow(CallState.IDLE)
@@ -37,7 +39,8 @@ class CallingViewModel @Inject constructor(
 
     fun startCall(pairingId: String, callType: String) {
         _callState.value = CallState.CALLING
-        callingRepository.sendCallOffer(pairingId, "local_user", callType)
+        val myUserId = preferencesManager.userId
+        callingRepository.sendCallOffer(pairingId, myUserId, callType)
 
         viewModelScope.launch {
             delay(2000)

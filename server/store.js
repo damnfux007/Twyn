@@ -1,22 +1,13 @@
-/**
- * Twyn In-Memory Data Store
- *
- * Stores users, pairings, pending messages, and media metadata.
- * For 5-10 users this is perfectly adequate.
- * Server never stores plaintext — only encrypted ciphertext.
- */
 const { v4: uuid } = require('uuid');
 
 class InMemoryStore {
   constructor() {
-    this.users = new Map();           // userId -> User
-    this.pairings = new Map();        // pairingId -> Pairing
-    this.userPairings = new Map();    // userId -> Set of pairingIds
-    this.pendingMessages = new Map(); // pairingId -> [EncryptedMessage]
-    this.mediaAssets = new Map();     // assetId -> MediaAsset
+    this.users = new Map();
+    this.pairings = new Map();
+    this.userPairings = new Map();
+    this.pendingMessages = new Map();
+    this.mediaAssets = new Map();
   }
-
-  // ── User operations ──────────────────────────────────────────
 
   upsertUser(user) {
     user.lastSeen = Date.now();
@@ -28,10 +19,8 @@ class InMemoryStore {
     return this.users.get(userId) || null;
   }
 
-  // ── Pairing operations ───────────────────────────────────────
-
-  createPairing(userAId, userBId) {
-    const pairingId = `pair_${uuid()}`;
+  createPairing(userAId, userBId, clientPairingId) {
+    const pairingId = clientPairingId || `pair_${uuid()}`;
     const pairing = { pairingId, userAId, userBId, createdAt: Date.now() };
     this.pairings.set(pairingId, pairing);
 
@@ -40,6 +29,7 @@ class InMemoryStore {
     this.userPairings.get(userAId).add(pairingId);
     this.userPairings.get(userBId).add(pairingId);
 
+    console.log(`Pairing created: ${pairingId} between ${userAId} and ${userBId}`);
     return pairing;
   }
 
@@ -69,8 +59,6 @@ class InMemoryStore {
     return p.userAId === myUserId ? p.userBId : p.userAId;
   }
 
-  // ── Message operations ───────────────────────────────────────
-
   queueMessage(message) {
     if (!this.pendingMessages.has(message.pairingId)) {
       this.pendingMessages.set(message.pairingId, []);
@@ -83,8 +71,6 @@ class InMemoryStore {
     this.pendingMessages.delete(pairingId);
     return messages;
   }
-
-  // ── Media operations ─────────────────────────────────────────
 
   storeMediaAsset(asset) {
     this.mediaAssets.set(asset.assetId, asset);

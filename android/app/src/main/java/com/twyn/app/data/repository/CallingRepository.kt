@@ -37,13 +37,13 @@ class CallingRepository @Inject constructor(
      * @param myUserId This user's ID
      * @param offerSdp The SDP offer string from WebRTC
      */
-    fun sendCallOffer(pairingId: String, myUserId: String, offerSdp: String) {
+    fun sendCallOffer(pairingId: String, myUserId: String, callType: String) {
         val wsMessage = WsMessage(
             type = "CALL_OFFER",
             payload = json.encodeToString(mapOf(
                 "pairingId" to pairingId,
                 "callerId" to myUserId,
-                "offerSdp" to offerSdp
+                "callType" to callType
             ))
         )
         webSocketClient.send(wsMessage)

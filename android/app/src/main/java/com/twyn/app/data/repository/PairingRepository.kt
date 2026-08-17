@@ -66,8 +66,9 @@ class PairingRepository @Inject constructor(
                 return Result.failure(Exception("Cannot pair with yourself"))
             }
 
-            val existing = pairingDao.getPairing("${partnerId}_$myUserId")
-                ?: pairingDao.getPairing("${myUserId}_$partnerId")
+            val pairingId = listOf(myUserId, partnerId).sorted().joinToString("_")
+
+            val existing = pairingDao.getPairing(pairingId)
             if (existing != null) {
                 return Result.failure(Exception("Already paired with this contact"))
             }
@@ -77,8 +78,6 @@ class PairingRepository @Inject constructor(
             } catch (e: Exception) {
                 Log.w("PairingRepository", "Could not decode pre-key bundle: ${e.message}")
             }
-
-            val pairingId = UUID.randomUUID().toString()
 
             val payload = """{"pairingId":"$pairingId","partnerId":"$partnerId","preKeyBundle":"$preKeyBundleBase64"}"""
             try {
@@ -129,5 +128,20 @@ class PairingRepository @Inject constructor(
 
     suspend fun updatePartnerName(partnerId: String, name: String) {
         pairingDao.updatePartnerNameByPartnerId(partnerId, name)
+    }
+
+    suspend fun handlePairingComplete(serverPairingId: String, partnerId: String) {
+        val existing = pairingDao.getPairing(serverPairingId)
+        if (existing != null) {
+            return
+        }
+
+        val entity = PairingEntity(
+            pairingId = serverPairingId,
+            partnerId = partnerId,
+            partnerName = "Contact ${partnerId.take(8)}",
+            createdAt = System.currentTimeMillis()
+        )
+        pairingDao.insertPairing(entity)
     }
 }

@@ -122,11 +122,11 @@ class MessageHandler {
 
     const existing = store.findPairingBetween(this.authenticatedUserId, creatorId);
     if (existing) {
-      this.send({ type: 'PAIRING_EXISTS', payload: existing.pairingId, timestamp: Date.now() });
+      this.send({ type: 'PAIRING_COMPLETE', payload: JSON.stringify(existing), timestamp: Date.now() });
       return;
     }
 
-    const pairing = store.createPairing(creatorId, this.authenticatedUserId);
+    const pairing = store.createPairing(creatorId, this.authenticatedUserId, data.pairingId);
     const pairingJson = JSON.stringify(pairing);
 
     conn.sendTo(creatorId, { type: 'PAIRING_COMPLETE', payload: pairingJson, timestamp: Date.now() });
