@@ -1,5 +1,6 @@
 package com.twyn.app.ui.settings
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
@@ -194,7 +195,7 @@ fun SettingsScreen(
                 placeholder = "Tell your contacts about yourself..."
             )
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Divider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("Privacy")
 
@@ -206,7 +207,7 @@ fun SettingsScreen(
                 onCheckedChange = { viewModel.toggleOnlineStatus(it) }
             )
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Divider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("Appearance")
 
@@ -225,7 +226,7 @@ fun SettingsScreen(
                 onClick = { showChatThemeDialog = true }
             )
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Divider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("Account")
 
@@ -243,7 +244,7 @@ fun SettingsScreen(
                 onClick = onCheckUpdate
             )
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Divider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("About")
 
