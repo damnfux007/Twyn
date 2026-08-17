@@ -4,29 +4,47 @@ import android.Manifest
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
+import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.google.zxing.*
-import com.google.zxing.common.HybridBinarizer
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 import com.twyn.app.ui.theme.*
 import java.io.File
+import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -36,19 +54,17 @@ fun QrScanScreen(
     viewModel: PairingViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    var isProcessing by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
+    var isScanning by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showSuccess by remember { mutableStateOf(false) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            isProcessing = true
-            errorMessage = null
+            isScanning = false
             scanQrFromUri(context, it) { result ->
-                isProcessing = false
                 when (result) {
                     is QrScanResult.Success -> {
                         viewModel.processScannedQr(result.content) {
@@ -57,41 +73,10 @@ fun QrScanScreen(
                     }
                     is QrScanResult.Error -> {
                         errorMessage = result.message
+                        isScanning = true
                     }
                 }
             }
-        }
-    }
-
-    val photoFile = remember {
-        File(context.cacheDir, "twyn_qr_photo.jpg").also { it.deleteOnExit() }
-    }
-    val photoUri = remember {
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
-    }
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success && photoFile.exists()) {
-            isProcessing = true
-            errorMessage = null
-            scanQrFromFile(context, photoFile) { result ->
-                isProcessing = false
-                photoFile.delete()
-                when (result) {
-                    is QrScanResult.Success -> {
-                        viewModel.processScannedQr(result.content) {
-                            onPairingComplete()
-                        }
-                    }
-                    is QrScanResult.Error -> {
-                        errorMessage = result.message
-                    }
-                }
-            }
-        } else {
-            errorMessage = "Photo capture failed. Try again."
         }
     }
 
@@ -105,147 +90,247 @@ fun QrScanScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = Color.Black.copy(alpha = 0.7f),
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color.Black
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "Point your camera at the Twyn QR code\nor pick one from your gallery",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    if (cameraPermission.status.isGranted) {
-                        cameraLauncher.launch(photoUri)
-                    } else {
-                        cameraPermission.launchPermissionRequest()
+            if (cameraPermission.status.isGranted) {
+                LiveCameraScanner(
+                    isScanning = isScanning,
+                    onQrDetected = { content ->
+                        isScanning = false
+                        viewModel.processScannedQr(content) {
+                            onPairingComplete()
+                        }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                enabled = !isProcessing
-            ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Scan with Camera")
-            }
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = { galleryLauncher.launch("image/*") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = !isProcessing
-            ) {
-                Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Pick from Gallery")
-            }
-
-            if (isProcessing) {
-                Spacer(modifier = Modifier.height(24.dp))
-                CircularProgressIndicator(color = Primary)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Processing QR code...", color = OnSurfaceVariant)
-            }
-
-            errorMessage?.let { error ->
-                Spacer(modifier = Modifier.height(16.dp))
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = UnreadBadge.copy(alpha = 0.15f)
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(12.dp)
                 ) {
                     Text(
-                        text = error,
-                        modifier = Modifier.padding(12.dp),
-                        color = UnreadBadge
+                        text = "Point camera at Twyn QR code",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(260.dp)
+                        .align(Alignment.Center)
+                        .border(2.dp, Primary, RoundedCornerShape(12.dp))
+                )
+
+                errorMessage?.let { error ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = UnreadBadge.copy(alpha = 0.9f)
+                        )
+                    ) {
+                        Text(
+                            text = error,
+                            modifier = Modifier.padding(12.dp),
+                            color = Color.White
+                        )
+                    }
+                }
+
+                if (showSuccess) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.Center)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Primary.copy(alpha = 0.9f))
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Pairing successful!",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    OutlinedButton(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pick from Gallery")
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Camera permission is needed\nto scan QR codes",
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = { cameraPermission.launchPermissionRequest() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                    ) {
+                        Text("Grant Camera Permission")
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Text("Pick from Gallery Instead")
+                    }
                 }
             }
         }
     }
 }
 
+@Composable
+private fun LiveCameraScanner(
+    isScanning: Boolean,
+    onQrDetected: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var lastScanTime by remember { mutableStateOf(0L) }
+
+    val scanner = remember {
+        BarcodeScanning.getClient(
+            com.google.mlkit.vision.barcode.BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .build()
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { scanner.close() }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            val previewView = PreviewView(ctx)
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+
+            cameraProviderFuture.addListener({
+                val cameraProvider = cameraProviderFuture.get()
+
+                val preview = Preview.Builder().build().also {
+                    it.surfaceProvider = previewView.surfaceProvider
+                }
+
+                val imageAnalysis = ImageAnalysis.Builder()
+                    .setTargetResolution(Size(1280, 720))
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+
+                imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
+                    if (!isScanning) {
+                        imageProxy.close()
+                        return@setAnalyzer
+                    }
+
+                    val now = System.currentTimeMillis()
+                    if (now - lastScanTime < 1000) {
+                        imageProxy.close()
+                        return@setAnalyzer
+                    }
+
+                    try {
+                        val mediaImage = imageProxy.image
+                        if (mediaImage != null) {
+                            val image = InputImage.fromMediaImage(
+                                mediaImage,
+                                imageProxy.imageInfo.rotationDegrees
+                            )
+                            scanner.process(image)
+                                .addOnSuccessListener { barcodes ->
+                                    val twynBarcode = barcodes.firstOrNull { barcode ->
+                                        barcode.rawValue?.contains("twyn", ignoreCase = true) == true
+                                    }
+                                    if (twynBarcode != null && isScanning) {
+                                        lastScanTime = System.currentTimeMillis()
+                                        onQrDetected(twynBarcode.rawValue!!)
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("QrScan", "Barcode scan failed", e)
+                                }
+                                .addOnCompleteListener {
+                                    imageProxy.close()
+                                }
+                        } else {
+                            imageProxy.close()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("QrScan", "Image analysis error", e)
+                        imageProxy.close()
+                    }
+                }
+
+                try {
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview,
+                        imageAnalysis
+                    )
+                } catch (e: Exception) {
+                    Log.e("QrScan", "Camera bind failed", e)
+                }
+            }, ContextCompat.getMainExecutor(ctx))
+
+            previewView
+        },
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
 private sealed class QrScanResult {
     data class Success(val content: String) : QrScanResult()
     data class Error(val message: String) : QrScanResult()
-}
-
-private fun decodeQrFromBitmap(bitmap: android.graphics.Bitmap): QrScanResult {
-    val width = bitmap.width
-    val height = bitmap.height
-    val pixels = IntArray(width * height)
-    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-    val source = RGBLuminanceSource(width, height, pixels)
-    val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
-
-    val reader = MultiFormatReader()
-    return try {
-        val result = reader.decode(binaryBitmap)
-        val text = result.text
-        if (text.contains("twyn", ignoreCase = true)) {
-            QrScanResult.Success(text)
-        } else {
-            QrScanResult.Error("Scanned code is not a Twyn QR code.")
-        }
-    } catch (e: NotFoundException) {
-        val rotated = rotateBitmap(bitmap, 90)
-        if (rotated != null) {
-            decodeQrFromBitmap(rotated)
-        } else {
-            QrScanResult.Error("No QR code detected. Make sure the code is clear, centered, and well-lit.")
-        }
-    } catch (e: Exception) {
-        QrScanResult.Error("Failed to read QR code: ${e.message}")
-    }
-}
-
-private fun rotateBitmap(source: android.graphics.Bitmap, degrees: Int): android.graphics.Bitmap? {
-    return try {
-        val matrix = android.graphics.Matrix()
-        matrix.postRotate(degrees.toFloat())
-        android.graphics.Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
-    } catch (e: Exception) {
-        null
-    }
-}
-
-private fun scanQrFromFile(
-    context: Context,
-    file: File,
-    onResult: (QrScanResult) -> Unit
-) {
-    try {
-        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-        if (bitmap == null) {
-            onResult(QrScanResult.Error("Cannot read the photo."))
-            return
-        }
-        onResult(decodeQrFromBitmap(bitmap))
-    } catch (e: Exception) {
-        onResult(QrScanResult.Error("Cannot read image: ${e.message}"))
-    }
 }
 
 private fun scanQrFromUri(
@@ -262,7 +347,31 @@ private fun scanQrFromUri(
             onResult(QrScanResult.Error("Cannot read this image."))
             return
         }
-        onResult(decodeQrFromBitmap(bitmap))
+
+        val scanner = BarcodeScanning.getClient(
+            com.google.mlkit.vision.barcode.BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .build()
+        )
+
+        val image = InputImage.fromBitmap(bitmap, 0)
+        scanner.process(image)
+            .addOnSuccessListener { barcodes ->
+                val twynBarcode = barcodes.firstOrNull { barcode ->
+                    barcode.rawValue?.contains("twyn", ignoreCase = true) == true
+                }
+                if (twynBarcode != null) {
+                    onResult(QrScanResult.Success(twynBarcode.rawValue!!))
+                } else {
+                    onResult(QrScanResult.Error("No Twyn QR code found in this image."))
+                }
+            }
+            .addOnFailureListener { e ->
+                onResult(QrScanResult.Error("Failed to scan image: ${e.message}"))
+            }
+            .addOnCompleteListener {
+                scanner.close()
+            }
     } catch (e: Exception) {
         onResult(QrScanResult.Error("Cannot read image: ${e.message}"))
     }
