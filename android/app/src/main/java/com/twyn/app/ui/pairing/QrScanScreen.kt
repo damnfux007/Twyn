@@ -2,11 +2,10 @@ package com.twyn.app.ui.pairing
 
 import android.Manifest
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -23,19 +22,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.RGBLuminanceSource
+import com.google.zxing.common.HybridBinarizer
 import com.twyn.app.ui.theme.*
 
-/**
- * QR Code scanning screen.
- * Supports two modes:
- * 1. Live camera scanning using ML Kit barcode detection
- * 2. Pick an existing QR code image from the phone's photo gallery
- *
- * Both methods decode the same QR format: "twyn:<userId>:<preKeyBundle>:<token>"
- */
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun QrScanScreen(
@@ -44,19 +36,18 @@ fun QrScanScreen(
     viewModel: PairingViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    var scanMode by remember { mutableStateOf<ScanMode?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
-    // Gallery image picker
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             isProcessing = true
-            scanQrFromImage(context, it) { result ->
+            errorMessage = null
+            scanQrFromUri(context, it) { result ->
                 isProcessing = false
                 when (result) {
                     is QrScanResult.Success -> {
@@ -72,13 +63,13 @@ fun QrScanScreen(
         }
     }
 
-    // Camera capture (simplified — in production use CameraX preview)
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
         bitmap?.let {
             isProcessing = true
-            scanQrFromBitmap(context, it) { result ->
+            errorMessage = null
+            scanQrFromBitmap(it) { result ->
                 isProcessing = false
                 when (result) {
                     is QrScanResult.Success -> {
@@ -119,7 +110,7 @@ fun QrScanScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Choose how to scan the QR code",
+                text = "Point your camera at the Twyn QR code\nor pick one from your gallery",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onBackground
@@ -127,11 +118,9 @@ fun QrScanScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Camera scan button
             Button(
                 onClick = {
                     if (cameraPermission.status.isGranted) {
-                        scanMode = ScanMode.CAMERA
                         cameraLauncher.launch(null)
                     } else {
                         cameraPermission.launchPermissionRequest()
@@ -150,12 +139,8 @@ fun QrScanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Gallery pick button
             OutlinedButton(
-                onClick = {
-                    scanMode = ScanMode.GALLERY
-                    galleryLauncher.launch("image/*")
-                },
+                onClick = { galleryLauncher.launch("image/*") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -169,6 +154,7 @@ fun QrScanScreen(
             if (isProcessing) {
                 Spacer(modifier = Modifier.height(24.dp))
                 CircularProgressIndicator(color = Primary)
+                Spacer(modifier = Modifier.height(8.dp))
                 Text("Processing QR code...", color = OnSurfaceVariant)
             }
 
@@ -190,80 +176,54 @@ fun QrScanScreen(
     }
 }
 
-private enum class ScanMode { CAMERA, GALLERY }
-
 private sealed class QrScanResult {
     data class Success(val content: String) : QrScanResult()
     data class Error(val message: String) : QrScanResult()
 }
 
-/**
- * Scan a QR code from a Bitmap (camera capture).
- * Uses ML Kit barcode detection.
- */
 private fun scanQrFromBitmap(
-    context: Context,
     bitmap: android.graphics.Bitmap,
     onResult: (QrScanResult) -> Unit
 ) {
-    val image = InputImage.fromBitmap(bitmap, 0)
-    val scanner = BarcodeScanning.getClient()
+    try {
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
-    scanner.process(image)
-        .addOnSuccessListener { barcodes ->
-            if (barcodes.isEmpty()) {
-                onResult(QrScanResult.Error("No QR code detected. Make sure the code is clear and centered."))
-                return@addOnSuccessListener
-            }
-            val qr = barcodes.firstOrNull { barcode ->
-                val value = barcode.rawValue ?: barcode.displayValue ?: ""
-                value.contains("twyn", ignoreCase = true)
-            }
-            if (qr != null) {
-                val value = qr.rawValue ?: qr.displayValue ?: ""
-                onResult(QrScanResult.Success(value))
-            } else {
-                val found = barcodes.size
-                onResult(QrScanResult.Error("Found $found barcode(s) but none are Twyn QR codes. Scan the QR generated by the Twyn app."))
-            }
+        val source = RGBLuminanceSource(width, height, pixels)
+        val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
+
+        val reader = MultiFormatReader()
+        val result = reader.decode(binaryBitmap)
+        val text = result.text
+
+        if (text.startsWith("twyn:")) {
+            onResult(QrScanResult.Success(text))
+        } else {
+            onResult(QrScanResult.Error("Scanned code is not a Twyn QR code."))
         }
-        .addOnFailureListener { e ->
-            onResult(QrScanResult.Error("Failed to scan QR code: ${e.message}"))
-        }
+    } catch (e: Exception) {
+        onResult(QrScanResult.Error("No QR code detected. Make sure the code is clear and centered."))
+    }
 }
 
-/**
- * Scan a QR code from a gallery image URI.
- */
-private fun scanQrFromImage(
+private fun scanQrFromUri(
     context: Context,
     uri: Uri,
     onResult: (QrScanResult) -> Unit
 ) {
     try {
-        val image = InputImage.fromFilePath(context, uri)
-        val scanner = BarcodeScanning.getClient()
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val bitmap = BitmapFactory.decodeStream(inputStream)
+        inputStream?.close()
 
-        scanner.process(image)
-            .addOnSuccessListener { barcodes ->
-                if (barcodes.isEmpty()) {
-                    onResult(QrScanResult.Error("No QR code detected in this image."))
-                    return@addOnSuccessListener
-                }
-                val qr = barcodes.firstOrNull { barcode ->
-                    val value = barcode.rawValue ?: barcode.displayValue ?: ""
-                    value.contains("twyn", ignoreCase = true)
-                }
-                if (qr != null) {
-                    val value = qr.rawValue ?: qr.displayValue ?: ""
-                    onResult(QrScanResult.Success(value))
-                } else {
-                    onResult(QrScanResult.Error("Found ${barcodes.size} barcode(s) but none are Twyn QR codes."))
-                }
-            }
-            .addOnFailureListener { e ->
-                onResult(QrScanResult.Error("Failed to scan: ${e.message}"))
-            }
+        if (bitmap == null) {
+            onResult(QrScanResult.Error("Cannot read this image."))
+            return
+        }
+
+        scanQrFromBitmap(bitmap, onResult)
     } catch (e: Exception) {
         onResult(QrScanResult.Error("Cannot read image: ${e.message}"))
     }
