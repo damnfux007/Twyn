@@ -18,15 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.google.zxing.BinaryBitmap
-import com.google.zxing.MultiFormatReader
-import com.google.zxing.RGBLuminanceSource
+import com.google.zxing.*
 import com.google.zxing.common.HybridBinarizer
 import com.twyn.app.ui.theme.*
+import java.io.File
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -63,14 +63,22 @@ fun QrScanScreen(
         }
     }
 
+    val photoFile = remember {
+        File(context.cacheDir, "twyn_qr_photo.jpg").also { it.deleteOnExit() }
+    }
+    val photoUri = remember {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+    }
+
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        bitmap?.let {
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && photoFile.exists()) {
             isProcessing = true
             errorMessage = null
-            scanQrFromBitmap(it) { result ->
+            scanQrFromFile(context, photoFile) { result ->
                 isProcessing = false
+                photoFile.delete()
                 when (result) {
                     is QrScanResult.Success -> {
                         viewModel.processScannedQr(result.content) {
@@ -82,6 +90,8 @@ fun QrScanScreen(
                     }
                 }
             }
+        } else {
+            errorMessage = "Photo capture failed. Try again."
         }
     }
 
@@ -121,7 +131,7 @@ fun QrScanScreen(
             Button(
                 onClick = {
                     if (cameraPermission.status.isGranted) {
-                        cameraLauncher.launch(null)
+                        cameraLauncher.launch(photoUri)
                     } else {
                         cameraPermission.launchPermissionRequest()
                     }
@@ -181,30 +191,60 @@ private sealed class QrScanResult {
     data class Error(val message: String) : QrScanResult()
 }
 
-private fun scanQrFromBitmap(
-    bitmap: android.graphics.Bitmap,
+private fun decodeQrFromBitmap(bitmap: android.graphics.Bitmap): QrScanResult {
+    val width = bitmap.width
+    val height = bitmap.height
+    val pixels = IntArray(width * height)
+    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+    val source = RGBLuminanceSource(width, height, pixels)
+    val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
+
+    val reader = MultiFormatReader()
+    return try {
+        val result = reader.decode(binaryBitmap)
+        val text = result.text
+        if (text.contains("twyn", ignoreCase = true)) {
+            QrScanResult.Success(text)
+        } else {
+            QrScanResult.Error("Scanned code is not a Twyn QR code.")
+        }
+    } catch (e: NotFoundException) {
+        val rotated = rotateBitmap(bitmap, 90)
+        if (rotated != null) {
+            decodeQrFromBitmap(rotated)
+        } else {
+            QrScanResult.Error("No QR code detected. Make sure the code is clear, centered, and well-lit.")
+        }
+    } catch (e: Exception) {
+        QrScanResult.Error("Failed to read QR code: ${e.message}")
+    }
+}
+
+private fun rotateBitmap(source: android.graphics.Bitmap, degrees: Int): android.graphics.Bitmap? {
+    return try {
+        val matrix = android.graphics.Matrix()
+        matrix.postRotate(degrees.toFloat())
+        android.graphics.Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private fun scanQrFromFile(
+    context: Context,
+    file: File,
     onResult: (QrScanResult) -> Unit
 ) {
     try {
-        val width = bitmap.width
-        val height = bitmap.height
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-        val source = RGBLuminanceSource(width, height, pixels)
-        val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
-
-        val reader = MultiFormatReader()
-        val result = reader.decode(binaryBitmap)
-        val text = result.text
-
-        if (text.startsWith("twyn:")) {
-            onResult(QrScanResult.Success(text))
-        } else {
-            onResult(QrScanResult.Error("Scanned code is not a Twyn QR code."))
+        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+        if (bitmap == null) {
+            onResult(QrScanResult.Error("Cannot read the photo."))
+            return
         }
+        onResult(decodeQrFromBitmap(bitmap))
     } catch (e: Exception) {
-        onResult(QrScanResult.Error("No QR code detected. Make sure the code is clear and centered."))
+        onResult(QrScanResult.Error("Cannot read image: ${e.message}"))
     }
 }
 
@@ -222,8 +262,7 @@ private fun scanQrFromUri(
             onResult(QrScanResult.Error("Cannot read this image."))
             return
         }
-
-        scanQrFromBitmap(bitmap, onResult)
+        onResult(decodeQrFromBitmap(bitmap))
     } catch (e: Exception) {
         onResult(QrScanResult.Error("Cannot read image: ${e.message}"))
     }
