@@ -20,6 +20,7 @@ class SettingsViewModel @Inject constructor(
     val profile: StateFlow<UserProfile> = _profile.asStateFlow()
 
     val isDarkTheme: StateFlow<Boolean> = preferencesManager.darkThemeFlow
+    val chatThemeIndex: StateFlow<Int> = preferencesManager.chatThemeIndexFlow
 
     init {
         _profile.value = profileRepository.getLocalProfile()
@@ -53,5 +54,9 @@ class SettingsViewModel @Inject constructor(
 
     fun toggleDarkTheme(enabled: Boolean) {
         preferencesManager.isDarkTheme = enabled
+    }
+
+    fun setChatTheme(index: Int) {
+        preferencesManager.chatThemeIndex = index
     }
 }

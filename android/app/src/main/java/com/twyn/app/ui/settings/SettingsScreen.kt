@@ -1,12 +1,13 @@
 package com.twyn.app.ui.settings
 
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,7 +42,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val profile by viewModel.profile.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
-    var showOnlineStatus by remember { mutableStateOf(profile.showOnlineStatus) }
+    val chatThemeIndex by viewModel.chatThemeIndex.collectAsState()
+    var showChatThemeDialog by remember { mutableStateOf(false) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -50,18 +53,57 @@ fun SettingsScreen(
                 val inputStream = context.contentResolver.openInputStream(it)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
-
                 val scaled = Bitmap.createScaledBitmap(bitmap, 400, 400, true)
                 val baos = ByteArrayOutputStream()
                 scaled.compress(Bitmap.CompressFormat.JPEG, 80, baos)
                 val base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
-
                 val file = File(context.filesDir, "profile_photo.jpg")
                 file.writeBytes(Base64.decode(base64, Base64.DEFAULT))
-
                 viewModel.updateProfilePhoto(file.absolutePath)
             } catch (_: Exception) { }
         }
+    }
+
+    if (showChatThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showChatThemeDialog = false },
+            title = { Text("Chat Bubble Color") },
+            text = {
+                Column {
+                    ChatThemes.all.forEachIndexed { index, theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.setChatTheme(index)
+                                    showChatThemeDialog = false
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(theme.sentBg)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(theme.name, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (index == chatThemeIndex) {
+                                Icon(Icons.Default.Check, null, tint = Primary)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showChatThemeDialog = false }) {
+                    Text("Done")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -152,10 +194,7 @@ fun SettingsScreen(
                 placeholder = "Tell your contacts about yourself..."
             )
 
-            Divider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = SurfaceLight
-            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("Privacy")
 
@@ -163,17 +202,11 @@ fun SettingsScreen(
                 title = "Show Online Status",
                 subtitle = "Let paired contacts see when you're online",
                 icon = Icons.Default.Visibility,
-                checked = showOnlineStatus,
-                onCheckedChange = {
-                    showOnlineStatus = it
-                    viewModel.toggleOnlineStatus(it)
-                }
+                checked = profile.showOnlineStatus,
+                onCheckedChange = { viewModel.toggleOnlineStatus(it) }
             )
 
-            Divider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = SurfaceLight
-            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("Appearance")
 
@@ -187,15 +220,12 @@ fun SettingsScreen(
 
             SettingClickable(
                 title = "Chat Theme",
-                subtitle = "Customize chat bubble colors",
+                subtitle = "Bubble color: ${ChatThemes.all.getOrNull(chatThemeIndex)?.name ?: "Blue"}",
                 icon = Icons.Default.Palette,
-                onClick = { }
+                onClick = { showChatThemeDialog = true }
             )
 
-            Divider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = SurfaceLight
-            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("Account")
 
@@ -213,15 +243,12 @@ fun SettingsScreen(
                 onClick = onCheckUpdate
             )
 
-            Divider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = SurfaceLight
-            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             SectionHeader("About")
 
             SettingClickable(
-                title = "Twyn v1.0.18",
+                title = "Twyn v1.0.20",
                 subtitle = "End-to-end encrypted 1-on-1 messaging",
                 icon = Icons.Default.Info,
                 onClick = onCheckUpdate
@@ -254,14 +281,10 @@ private fun SettingTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
-        placeholder = { Text(placeholder, color = OnSurfaceVariant) },
+        placeholder = if (placeholder.isNotEmpty()) {{ Text(placeholder) }} else null,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Primary,
-            unfocusedBorderColor = SurfaceLight
-        ),
         singleLine = label == "Display Name"
     )
 }
@@ -280,12 +303,7 @@ private fun SettingToggle(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = OnSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
+        Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
@@ -293,10 +311,7 @@ private fun SettingToggle(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = Primary
-            )
+            onCheckedChange = onCheckedChange
         )
     }
 }
@@ -311,24 +326,16 @@ private fun SettingClickable(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = OnSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
+        Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
         }
-        Icon(
-            Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = OnSurfaceVariant
-        )
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = OnSurfaceVariant)
     }
 }

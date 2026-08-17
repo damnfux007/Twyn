@@ -31,6 +31,7 @@ class PreferencesManager @Inject constructor(
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_GOOGLE_ACCOUNT = "google_account_email"
         private const val KEY_SIGNED_IN = "is_signed_in"
+        private const val KEY_CHAT_THEME_INDEX = "chat_theme_index"
     }
 
     var userId: String
@@ -74,6 +75,16 @@ class PreferencesManager @Inject constructor(
     var isSignedIn: Boolean
         get() = prefs.getBoolean(KEY_SIGNED_IN, false)
         set(value) = prefs.edit().putBoolean(KEY_SIGNED_IN, value).apply()
+
+    private val _chatThemeIndexFlow = MutableStateFlow(prefs.getInt(KEY_CHAT_THEME_INDEX, 0))
+    val chatThemeIndexFlow: StateFlow<Int> = _chatThemeIndexFlow.asStateFlow()
+
+    var chatThemeIndex: Int
+        get() = prefs.getInt(KEY_CHAT_THEME_INDEX, 0)
+        set(value) {
+            prefs.edit().putInt(KEY_CHAT_THEME_INDEX, value).apply()
+            _chatThemeIndexFlow.value = value
+        }
 
     private fun generateAndStoreUserId(): String {
         val id = "twyn_${Settings.Secure.ANDROID_ID}_${System.currentTimeMillis()}"

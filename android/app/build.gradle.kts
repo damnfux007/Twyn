@@ -14,8 +14,8 @@ android {
         applicationId = "com.twyn.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.19"
+        versionCode = 3
+        versionName = "1.0.20"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

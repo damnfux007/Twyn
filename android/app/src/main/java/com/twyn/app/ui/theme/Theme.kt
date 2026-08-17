@@ -1,20 +1,14 @@
 package com.twyn.app.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-
-/**
- * Twyn Material 3 theme.
- * Dark theme by default (feels more secure/private).
- * Supports light/dark via system settings.
- */
 
 private val DarkColorScheme = darkColorScheme(
     primary = Primary,
@@ -26,18 +20,22 @@ private val DarkColorScheme = darkColorScheme(
     surface = Surface,
     onSurface = OnSurface,
     surfaceVariant = SurfaceLight,
-    onSurfaceVariant = OnSurfaceVariant
+    onSurfaceVariant = OnSurfaceVariant,
+    error = UnreadBadge
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = LightPrimary,
-    onPrimary = OnPrimary,
-    secondary = Secondary,
-    onSecondary = OnSecondary,
+    onPrimary = Color.White,
+    secondary = Color(0xFF34C759),
+    onSecondary = Color.White,
     background = LightBackground,
     onBackground = LightOnBackground,
     surface = LightSurface,
-    onSurface = LightOnSurface
+    onSurface = LightOnSurface,
+    surfaceVariant = Color(0xFFE5E5EA),
+    onSurfaceVariant = Color(0xFF8E8E93),
+    error = Color(0xFFFF3B30)
 )
 
 @Composable
@@ -51,8 +49,10 @@ fun TwynTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
         }
     }
 

@@ -1,6 +1,6 @@
 package com.twyn.app.ui.calling
 
-import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,9 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.twyn.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,13 +26,27 @@ fun CallingScreen(
 ) {
     val callState by viewModel.callState.collectAsState()
     val callDuration by viewModel.callDuration.collectAsState()
+    val partnerName by viewModel.partnerName.collectAsState()
 
     LaunchedEffect(pairingId) {
-        viewModel.startCall(pairingId, "local_user", callType)
+        viewModel.loadPartnerName(pairingId)
+        viewModel.startCall(pairingId, callType)
     }
 
+    // Pulsing animation for calling state
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
     Scaffold(
-        containerColor = Background
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -41,31 +55,38 @@ fun CallingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            Spacer(modifier = Modifier.height(80.dp))
+
             Column(
-                modifier = Modifier.padding(top = 64.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
                         .size(96.dp)
+                        .graphicsLayer {
+                            if (callState == CallState.CALLING) {
+                                scaleX = pulseScale
+                                scaleY = pulseScale
+                            }
+                        }
                         .clip(CircleShape)
                         .background(Primary),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "P",
+                        text = partnerName.take(1).uppercase(),
                         color = OnPrimary,
                         style = MaterialTheme.typography.displayLarge
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "Paired Contact",
+                    text = partnerName,
                     style = MaterialTheme.typography.headlineMedium,
                     color = OnSurface,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -105,27 +126,29 @@ fun CallingScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 var isMuted by remember { mutableStateOf(false) }
-                FloatingActionButton(
+                IconButton(
                     onClick = { isMuted = !isMuted },
-                    containerColor = if (isMuted) UnreadBadge else SurfaceLight,
-                    shape = CircleShape,
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(if (isMuted) UnreadBadge.copy(alpha = 0.2f) else SurfaceLight)
                 ) {
                     Icon(
                         if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                         contentDescription = "Mute",
-                        tint = OnSurface
+                        tint = if (isMuted) UnreadBadge else OnSurface
                     )
                 }
 
-                FloatingActionButton(
+                IconButton(
                     onClick = {
                         viewModel.endCall(pairingId)
                         onCallEnd()
                     },
-                    containerColor = UnreadBadge,
-                    shape = CircleShape,
-                    modifier = Modifier.size(72.dp)
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(UnreadBadge)
                 ) {
                     Icon(
                         Icons.Default.CallEnd,
@@ -136,16 +159,17 @@ fun CallingScreen(
                 }
 
                 var isSpeaker by remember { mutableStateOf(false) }
-                FloatingActionButton(
+                IconButton(
                     onClick = { isSpeaker = !isSpeaker },
-                    containerColor = if (isSpeaker) Primary else SurfaceLight,
-                    shape = CircleShape,
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(if (isSpeaker) Primary.copy(alpha = 0.2f) else SurfaceLight)
                 ) {
                     Icon(
                         if (isSpeaker) Icons.Default.VolumeUp else Icons.Default.VolumeDown,
                         contentDescription = "Speaker",
-                        tint = OnSurface
+                        tint = if (isSpeaker) Primary else OnSurface
                     )
                 }
             }
