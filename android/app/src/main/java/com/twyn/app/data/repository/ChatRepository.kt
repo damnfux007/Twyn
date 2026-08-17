@@ -100,24 +100,19 @@ class ChatRepository @Inject constructor(
         pairingDao.updateLastMessage(pairingId, plaintext, System.currentTimeMillis())
 
         // Send via WebSocket
-        val payloadMap = mapOf(
-            "messageId" to messageId,
-            "pairingId" to pairingId,
-            "senderId" to myUserId,
-            "ciphertext" to ciphertext,
-            "contentType" to "TEXT"
+        val payloadJson = kotlinx.serialization.json.Json { encodeDefaults = true }.encodeToString(
+            kotlinx.serialization.json.JsonObject.serializer(),
+            kotlinx.serialization.json.buildJsonObject {
+                put("messageId", kotlinx.serialization.json.JsonPrimitive(messageId))
+                put("pairingId", kotlinx.serialization.json.JsonPrimitive(pairingId))
+                put("senderId", kotlinx.serialization.json.JsonPrimitive(myUserId))
+                put("ciphertext", kotlinx.serialization.json.JsonPrimitive(ciphertext))
+                put("contentType", kotlinx.serialization.json.JsonPrimitive("TEXT"))
+            }
         )
         val wsMessage = com.twyn.app.domain.model.WsMessage(
             type = "SEND_MESSAGE",
-            payload = kotlinx.serialization.json.Json {
-                encodeDefaults = true
-            }.encodeToString(
-                kotlinx.serialization.builtins.MapSerializer(
-                    kotlinx.serialization.builtins.serializer<String>(),
-                    kotlinx.serialization.builtins.serializer<String>()
-                ),
-                payloadMap
-            )
+            payload = payloadJson
         )
         webSocketClient.send(wsMessage)
     }
