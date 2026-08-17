@@ -74,7 +74,7 @@ class WelcomeViewModel @Inject constructor(
 data class WelcomeUiState(
     val displayName: String = "",
     val bio: String = "",
-    val serverUrl: String = "wss://your-project-name.glitch.me/ws",
+    val serverUrl: String = "wss://twyn-server.onrender.com/ws",
     val error: String? = null,
     val isComplete: Boolean = false
 )

@@ -30,7 +30,7 @@ import com.twyn.app.ui.theme.*
  * Features:
  * - Display name input (shown to all paired contacts)
  * - Bio (optional, shown in profile)
- * - Server URL input (pre-filled with Glitch URL)
+ * - Server URL input (pre-filled with Render URL)
  * - One-tap sign-in, no password needed
  * - Clean animated entrance
  */
@@ -175,7 +175,7 @@ fun WelcomeScreen(
                 value = uiState.serverUrl,
                 onValueChange = { viewModel.updateServerUrl(it) },
                 label = { Text("Server URL") },
-                placeholder = { Text("wss://your-server.glitch.me/ws") },
+                placeholder = { Text("wss://twyn-server.onrender.com/ws") },
                 leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -193,7 +193,7 @@ fun WelcomeScreen(
 
             // Server URL helper text
             Text(
-                text = "Don't have a server? Your friend can share one, or host free on Glitch.com",
+                text = "Don't have a server? Your friend can share one, or host free on Render.com",
                 style = MaterialTheme.typography.bodySmall,
                 color = OnSurfaceVariant.copy(alpha = 0.7f)
             )

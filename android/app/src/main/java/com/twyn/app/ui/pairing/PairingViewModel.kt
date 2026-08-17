@@ -1,6 +1,7 @@
 package com.twyn.app.ui.pairing
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twyn.app.data.repository.PairingRepository
@@ -13,10 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * ViewModel for the Pairing screen.
- * Generates QR codes and handles pairing completion.
- */
 @HiltViewModel
 class PairingViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
@@ -33,24 +30,35 @@ class PairingViewModel @Inject constructor(
 
     private fun generateQrCode() {
         viewModelScope.launch {
-            val profile = profileRepository.getLocalProfile()
-            val bitmap = pairingRepository.generatePairingQrCode(profile.userId)
-            _uiState.value = _uiState.value.copy(
-                qrBitmap = bitmap,
-                pairingCode = profile.userId.take(8).uppercase()
-            )
+            try {
+                val profile = profileRepository.getLocalProfile()
+                val bitmap = pairingRepository.generatePairingQrCode(profile.userId)
+                _uiState.value = _uiState.value.copy(
+                    qrBitmap = bitmap,
+                    pairingCode = profile.userId.take(8).uppercase()
+                )
+            } catch (e: Exception) {
+                Log.e("PairingViewModel", "Failed to generate QR code", e)
+                _uiState.value = _uiState.value.copy(statusMessage = "Failed to generate QR code")
+            }
         }
     }
 
     fun processScannedQr(qrContent: String, onComplete: () -> Unit) {
         viewModelScope.launch {
-            val userId = profileRepository.getLocalProfile().userId
-            val result = pairingRepository.processScannedQrCode(qrContent, userId)
-            result.onSuccess {
-                _uiState.value = _uiState.value.copy(isSuccess = true)
-                onComplete()
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(statusMessage = e.message)
+            try {
+                val userId = profileRepository.getLocalProfile().userId
+                val result = pairingRepository.processScannedQrCode(qrContent, userId)
+                result.onSuccess {
+                    _uiState.value = _uiState.value.copy(isSuccess = true, statusMessage = "Pairing successful!")
+                    onComplete()
+                }.onFailure { e ->
+                    Log.e("PairingViewModel", "Pairing failed", e)
+                    _uiState.value = _uiState.value.copy(statusMessage = e.message ?: "Pairing failed")
+                }
+            } catch (e: Exception) {
+                Log.e("PairingViewModel", "Unexpected error during pairing", e)
+                _uiState.value = _uiState.value.copy(statusMessage = "Error: ${e.message}")
             }
         }
     }
